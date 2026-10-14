@@ -21,7 +21,23 @@ En desarrollo para la entrega del 18 de octubre de 2026. Las instrucciones para 
 
 ## Configuración
 
-La clave de AMD Token Factory se define en la variable de entorno `RADEON_API_KEY` (por ejemplo, en un archivo `.env` local que no se versiona).
+La configuración se lee de variables de entorno (por ejemplo, de un archivo `.env` local que no se versiona):
+
+| Variable | Para qué sirve |
+|---|---|
+| `RADEON_API_KEY` | Clave de AMD Token Factory |
+| `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) |
+
+## Ejecutar en local
+
+Requiere Python 3.12 o superior.
+
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev]"   # en Linux/macOS: .venv/bin/python
+.venv/Scripts/python -m pytest                    # pruebas
+.venv/Scripts/python -m listaya                   # inicia el bot
+```
 
 ## Licencia
 

@@ -9,7 +9,10 @@ description = "Telegram assistant that turns supplier price lists into updated s
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "python-telegram-bot>=22.8,<23",
+    "python-dotenv>=1.2,<2",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
