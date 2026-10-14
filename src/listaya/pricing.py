@@ -6,7 +6,8 @@ arithmetic on Decimal values so results match a manual calculation exactly.
 Conventions (configurable, pending validation with the demo merchant):
 - Margin is measured over the selling price: (price - cost) / price.
 - Suggested price = unit cost / (1 - target margin), rounded to a step.
-- Costs and prices share one VAT convention (default: without VAT).
+- Prices follow one VAT convention (default: without VAT); supplier costs are
+  converted to it before pricing, and a cost with unknown VAT is never priced.
 """
 
 from __future__ import annotations
@@ -42,16 +43,30 @@ class PricingConfig:
     vat_rate: Decimal = Decimal("0.21")
     prices_include_vat: bool = False
 
+    def __post_init__(self) -> None:
+        if self.rounding_step <= 0:
+            raise ValueError("rounding_step must be positive")
+        if self.vat_rate < 0:
+            raise ValueError("vat_rate cannot be negative")
+
 
 @dataclass(frozen=True)
 class PriceQuote:
+    """Pricing result for one product.
+
+    new_cost is in the merchant's VAT convention. The current_price_* fields
+    describe the price the merchant charges today measured against the new
+    cost; they are what triggers the margin alert. The suggested price never
+    falls below the minimum margin by construction.
+    """
+
     new_cost: Decimal
     current_price: Decimal | None
     suggested_price: Decimal | None
     variation: Decimal | None
     cost_change: Decimal | None
-    current_margin: Decimal | None
-    below_min_margin: bool | None
+    current_price_margin: Decimal | None
+    current_price_below_min_margin: bool | None
     flags: frozenset[str] = field(default_factory=frozenset)
 
     @property
@@ -107,46 +122,83 @@ def convert_vat(
 
 def quote(
     new_cost: Decimal,
+    cost_includes_vat: bool | None,
     current_price: Decimal | None,
     current_cost: Decimal | None,
     currency: str | None,
     rule: MarginRule,
     config: PricingConfig,
 ) -> PriceQuote:
-    """Price one catalog product given its new unit cost (already in the merchant's VAT convention)."""
+    """Price one catalog product given the supplier's new unit cost.
+
+    current_price and current_cost come from the catalog and are already in the
+    merchant's VAT convention. Anything the engine cannot price without
+    assuming (unknown VAT, other or unknown currency) is returned unpriced and
+    flagged so the summary can report it separately.
+    """
     if new_cost <= 0:
         raise ValueError("new_cost must be positive")
 
     flags: set[str] = set()
-    if current_cost is None:
-        flags.add("no_previous_cost")
+    has_current_price = current_price is not None and current_price > 0
     if current_price is None:
         flags.add("no_current_price")
-    cost_change = (new_cost - current_cost) / current_cost if current_cost else None
+    elif not has_current_price:
+        flags.add("invalid_current_price")
+    if current_cost is None:
+        flags.add("no_previous_cost")
+    elif current_cost <= 0:
+        flags.add("invalid_previous_cost")
 
-    if currency != PRICED_CURRENCY:
-        flags.add("unknown_currency" if currency is None else "foreign_currency")
-        return PriceQuote(new_cost, current_price, None, None, cost_change, None, None, frozenset(flags))
+    def unpriced(cost: Decimal) -> PriceQuote:
+        return PriceQuote(
+            new_cost=cost,
+            current_price=current_price,
+            suggested_price=None,
+            variation=None,
+            cost_change=None,
+            current_price_margin=None,
+            current_price_below_min_margin=None,
+            flags=frozenset(flags),
+        )
 
-    raw_price = new_cost / (1 - rule.target_margin)
+    normalized_currency = (currency or "").strip().upper()
+    if not normalized_currency:
+        flags.add("unknown_currency")
+        return unpriced(new_cost)
+    if normalized_currency != PRICED_CURRENCY:
+        flags.add("foreign_currency")
+        return unpriced(new_cost)
+
+    try:
+        cost = convert_vat(new_cost, cost_includes_vat, config.prices_include_vat, config.vat_rate)
+    except UnknownVatError:
+        flags.add("unknown_vat")
+        return unpriced(new_cost)
+
+    cost_change = None
+    if current_cost is not None and current_cost > 0:
+        cost_change = (cost - current_cost) / current_cost
+
+    raw_price = cost / (1 - rule.target_margin)
     suggested = round_price(raw_price, config.rounding_step)
-    if suggested <= 0 or margin(suggested, new_cost) < rule.min_margin:
+    if suggested <= 0 or margin(suggested, cost) < rule.min_margin:
         # Rounding to the nearest step must never eat into the minimum margin.
         suggested = _round_up(raw_price, config.rounding_step)
 
-    variation = current_margin = below_min = None
-    if current_price is not None and current_price > 0:
+    variation = current_price_margin = below_min = None
+    if has_current_price:
         variation = (suggested - current_price) / current_price
-        current_margin = margin(current_price, new_cost)
-        below_min = current_margin < rule.min_margin
+        current_price_margin = margin(current_price, cost)
+        below_min = current_price_margin < rule.min_margin
 
     return PriceQuote(
-        new_cost=new_cost,
+        new_cost=cost,
         current_price=current_price,
         suggested_price=suggested,
         variation=variation,
         cost_change=cost_change,
-        current_margin=current_margin,
-        below_min_margin=below_min,
+        current_price_margin=current_price_margin,
+        current_price_below_min_margin=below_min,
         flags=frozenset(flags),
     )
