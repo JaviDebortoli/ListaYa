@@ -144,6 +144,11 @@ def convert_vat(
     return amount * (1 + rate)
 
 
+def _is_positive(value: Decimal | None) -> bool:
+    """True for a finite amount above zero; NaN and infinities are invalid."""
+    return value is not None and value.is_finite() and value > 0
+
+
 @_deterministic
 def quote(
     new_cost: Decimal,
@@ -162,24 +167,27 @@ def quote(
     unpriced, with every blocking problem flagged so the summary can report it.
     """
     flags: set[str] = set()
-    has_current_price = current_price is not None and current_price > 0
+    has_current_price = _is_positive(current_price)
     if current_price is None:
         flags.add("no_current_price")
     elif not has_current_price:
         flags.add("invalid_current_price")
+    has_current_cost = _is_positive(current_cost)
     if current_cost is None:
         flags.add("no_previous_cost")
-    elif current_cost <= 0:
+    elif not has_current_cost:
         flags.add("invalid_previous_cost")
 
     cost = new_cost
+    if not _is_positive(new_cost):
+        flags.add("invalid_new_cost")
     try:
-        cost = convert_vat(new_cost, cost_includes_vat, config.prices_include_vat, config.vat_rate)
+        if "invalid_new_cost" not in flags:
+            cost = convert_vat(new_cost, cost_includes_vat, config.prices_include_vat, config.vat_rate)
+        elif cost_includes_vat is None:
+            raise UnknownVatError
     except UnknownVatError:
         flags.add("unknown_vat")
-
-    if new_cost <= 0:
-        flags.add("invalid_new_cost")
 
     normalized_currency = (currency or "").strip().upper()
     if not normalized_currency:
@@ -200,7 +208,7 @@ def quote(
         )
 
     cost_change = None
-    if current_cost is not None and current_cost > 0:
+    if has_current_cost:
         cost_change = (cost - current_cost) / current_cost
 
     raw_price = cost / (1 - rule.target_margin)

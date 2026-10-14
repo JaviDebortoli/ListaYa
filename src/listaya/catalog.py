@@ -3,7 +3,8 @@
 The CSV is the source of truth for the catalog. Required columns: sku, name,
 cost, price. Optional columns: unit, pack_size, category. Any other column is
 kept untouched when prices are updated. Amounts use a dot as decimal separator
-and no thousands separator; empty cells mean "unknown".
+and no thousands separator; empty cells mean "unknown". Files may be UTF-8
+(with or without BOM) or Windows-1252, and are written back the same way.
 """
 
 from __future__ import annotations
@@ -16,10 +17,12 @@ import tempfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 REQUIRED_COLUMNS = ("sku", "name", "cost", "price")
 _BOM = b"\xef\xbb\xbf"
+# Excel in Spanish often saves CSV as Windows-1252 rather than UTF-8.
+_FALLBACK_ENCODING = "cp1252"
 
 
 class CatalogError(ValueError):
@@ -66,12 +69,20 @@ def _format(value: Decimal) -> str:
     return format(value, "f")
 
 
+class _ParsedFile(NamedTuple):
+    header: list[str]  # as written in the file, used to rewrite it unchanged
+    fieldnames: list[str]  # stripped names used to look up columns
+    rows: list[tuple[int, dict[str, str | None]]]  # (line number, row)
+    raw: bytes
+    encoding: str
+
+
 class CsvCatalog:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
 
     def load(self) -> list[CatalogProduct]:
-        _, rows, _ = self._read()
+        rows = self._read().rows
         products: list[CatalogProduct] = []
         seen: set[str] = set()
         for line, row in rows:
@@ -106,7 +117,8 @@ class CsvCatalog:
             pending[update.sku] = update
 
         self.load()  # validate the whole file before rewriting it
-        fieldnames, rows, raw = self._read()
+        parsed = self._read()
+        rows = parsed.rows
         known = {_text(row, "sku") for _, row in rows}
         missing = sorted(set(pending) - known)
         if missing:
@@ -118,18 +130,31 @@ class CsvCatalog:
                 row["cost"] = _format(update.cost)
                 row["price"] = _format(update.price)
 
-        lineterminator = "\r\n" if b"\r\n" in raw.split(b"\n", 1)[0] + b"\n" else "\n"
+        first_line = parsed.raw.split(b"\n", 1)[0]
+        lineterminator = "\r\n" if first_line.endswith(b"\r") else "\n"
         buffer = io.StringIO()
-        writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator=lineterminator)
-        writer.writeheader()
+        csv.writer(buffer, lineterminator=lineterminator).writerow(parsed.header)  # original spacing
+        writer = csv.DictWriter(buffer, fieldnames=parsed.fieldnames, lineterminator=lineterminator)
         writer.writerows(row for _, row in rows)
-        encoding = "utf-8-sig" if raw.startswith(_BOM) else "utf-8"
-        self._write_atomically(buffer.getvalue().encode(encoding))
+        self._write_atomically(buffer.getvalue().encode(parsed.encoding))
 
-    def _read(self) -> tuple[list[str], list[tuple[int, dict[str, str | None]]], bytes]:
+    @staticmethod
+    def _decode(raw: bytes) -> tuple[str, str]:
+        if raw.startswith(_BOM):
+            return raw.decode("utf-8-sig"), "utf-8-sig"
+        for encoding in ("utf-8", _FALLBACK_ENCODING):
+            try:
+                return raw.decode(encoding), encoding
+            except UnicodeDecodeError:
+                continue
+        raise CatalogError("unsupported file encoding: save the catalog as UTF-8 CSV")
+
+    def _read(self) -> _ParsedFile:
         raw = self.path.read_bytes()
-        reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig"), newline=""))
-        fieldnames = [name.strip() for name in reader.fieldnames or []]
+        text, encoding = self._decode(raw)
+        reader = csv.DictReader(io.StringIO(text, newline=""))
+        header = list(reader.fieldnames or [])
+        fieldnames = [name.strip() for name in header]
         missing = [column for column in REQUIRED_COLUMNS if column not in fieldnames]
         if missing:
             raise CatalogError(f"missing required column(s): {', '.join(missing)}")
@@ -140,7 +165,7 @@ class CsvCatalog:
             if row.get(None):  # type: ignore[call-overload]
                 raise CatalogError(f"line {reader.line_num}: more cells than header columns")
             rows.append((reader.line_num, dict(row)))
-        return fieldnames, rows, raw
+        return _ParsedFile(header, fieldnames, rows, raw, encoding)
 
     def _write_atomically(self, data: bytes) -> None:
         mode = stat.S_IMODE(self.path.stat().st_mode)

@@ -157,3 +157,22 @@ class TestRobustness:
         catalog_path.chmod(0o644)
         CsvCatalog(catalog_path).apply_updates([PriceUpdate(sku="2231", cost=D("100"), price=D("1430"))])
         assert stat.S_IMODE(catalog_path.stat().st_mode) == 0o644
+
+    def test_reads_and_keeps_windows_1252_catalog(self, tmp_path: Path):
+        path = tmp_path / "latin.csv"
+        path.write_bytes("sku,name,cost,price\n1,Caño PVC ½,10,20\n".encode("cp1252"))
+        catalog = CsvCatalog(path)
+        assert catalog.load()[0].name == "Caño PVC ½"
+        catalog.apply_updates([PriceUpdate(sku="1", cost=D("12"), price=D("30"))])
+        assert path.read_bytes() == "sku,name,cost,price\n1,Caño PVC ½,12,30\n".encode("cp1252")
+
+    def test_undecodable_catalog_raises_catalog_error(self, tmp_path: Path):
+        path = tmp_path / "binary.csv"
+        path.write_bytes(b"sku,name,cost,price\n1,\x81\x8d,10,20\n")
+        with pytest.raises(CatalogError, match="encoding"):
+            CsvCatalog(path).load()
+
+    def test_keeps_header_spacing_on_update(self, tmp_path: Path):
+        path = write_catalog(tmp_path / "spaced.csv", "1, Martillo, 10, 20\n", header="sku, name, cost, price\n")
+        CsvCatalog(path).apply_updates([PriceUpdate(sku="1", cost=D("12"), price=D("30"))])
+        assert path.read_text(encoding="utf-8").splitlines() == ["sku, name, cost, price", "1, Martillo,12,30"]

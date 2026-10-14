@@ -241,3 +241,17 @@ class TestQuote:
             result = run()
         assert result.suggested_price == D("1430")
         assert q4(result.variation) == D("0.1917")
+
+    @pytest.mark.parametrize("bad", [D("NaN"), D("Infinity"), D("-Infinity")])
+    def test_non_finite_new_cost_is_flagged(self, bad: Decimal):
+        result = run(new_cost=bad)
+        assert not result.priced
+        assert "invalid_new_cost" in result.flags
+
+    @pytest.mark.parametrize("bad", [D("NaN"), D("Infinity")])
+    def test_non_finite_catalog_values_are_flagged(self, bad: Decimal):
+        result = run(current_price=bad, current_cost=bad)
+        assert result.suggested_price == D("1430")
+        assert result.variation is None
+        assert result.cost_change is None
+        assert {"invalid_current_price", "invalid_previous_cost"} <= result.flags
