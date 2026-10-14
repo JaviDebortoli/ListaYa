@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import pytest
 
@@ -219,6 +219,25 @@ class TestQuote:
             assert result.current_price_below_min_margin is None
             assert "invalid_current_price" in result.flags
 
-    def test_rejects_non_positive_cost(self):
-        with pytest.raises(ValueError):
-            run(new_cost=D("0"))
+    def test_non_positive_new_cost_is_flagged_not_raised(self):
+        for new_cost in (D("0"), D("-5")):
+            result = run(new_cost=new_cost)
+            assert not result.priced
+            assert "invalid_new_cost" in result.flags
+
+    def test_every_blocking_problem_is_reported(self):
+        result = run(new_cost=D("0"), cost_includes_vat=None, currency=None)
+        assert not result.priced
+        assert {"invalid_new_cost", "unknown_vat", "unknown_currency"} <= result.flags
+
+    def test_unpriced_foreign_cost_is_still_converted_to_merchant_vat_convention(self):
+        result = run(new_cost=D("12.1"), cost_includes_vat=True, currency="USD")
+        assert not result.priced
+        assert result.new_cost == D("10")
+
+    def test_results_do_not_depend_on_ambient_decimal_precision(self):
+        with localcontext() as ctx:
+            ctx.prec = 3
+            result = run()
+        assert result.suggested_price == D("1430")
+        assert q4(result.variation) == D("0.1917")

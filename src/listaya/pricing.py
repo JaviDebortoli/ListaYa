@@ -12,11 +12,30 @@ Conventions (configurable, pending validation with the demo merchant):
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
-from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
-from typing import Mapping
+from decimal import ROUND_CEILING, ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
+from typing import Callable, Mapping, ParamSpec, TypeVar
 
 PRICED_CURRENCY = "ARS"
+
+# Flags that leave a product unpriced; the rest are informational.
+BLOCKING_FLAGS = frozenset({"invalid_new_cost", "unknown_vat", "unknown_currency", "foreign_currency"})
+
+# Fixed arithmetic context so results never depend on the caller's decimal settings.
+_DECIMAL_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _deterministic(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    @functools.wraps(func)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with localcontext(_DECIMAL_CONTEXT):
+            return func(*args, **kwargs)
+
+    return wrapper
 
 
 class UnknownVatError(ValueError):
@@ -54,7 +73,8 @@ class PricingConfig:
 class PriceQuote:
     """Pricing result for one product.
 
-    new_cost is in the merchant's VAT convention. The current_price_* fields
+    new_cost is in the merchant's VAT convention whenever the supplier stated
+    whether it includes VAT; with unknown VAT it is the raw supplier cost. The current_price_* fields
     describe the price the merchant charges today measured against the new
     cost; they are what triggers the margin alert. The suggested price never
     falls below the minimum margin by construction.
@@ -89,10 +109,12 @@ def resolve_rule(
     return default
 
 
+@_deterministic
 def margin(price: Decimal, cost: Decimal) -> Decimal:
     return (price - cost) / price
 
 
+@_deterministic
 def round_price(value: Decimal, step: Decimal) -> Decimal:
     """Round to the nearest multiple of step (half up)."""
     if step <= 0:
@@ -100,10 +122,12 @@ def round_price(value: Decimal, step: Decimal) -> Decimal:
     return (value / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step
 
 
+@_deterministic
 def _round_up(value: Decimal, step: Decimal) -> Decimal:
     return (value / step).quantize(Decimal("1"), rounding=ROUND_CEILING) * step
 
 
+@_deterministic
 def convert_vat(
     amount: Decimal,
     includes_vat: bool | None,
@@ -120,6 +144,7 @@ def convert_vat(
     return amount * (1 + rate)
 
 
+@_deterministic
 def quote(
     new_cost: Decimal,
     cost_includes_vat: bool | None,
@@ -133,12 +158,9 @@ def quote(
 
     current_price and current_cost come from the catalog and are already in the
     merchant's VAT convention. Anything the engine cannot price without
-    assuming (unknown VAT, other or unknown currency) is returned unpriced and
-    flagged so the summary can report it separately.
+    assuming (invalid cost, unknown VAT, other or unknown currency) is returned
+    unpriced, with every blocking problem flagged so the summary can report it.
     """
-    if new_cost <= 0:
-        raise ValueError("new_cost must be positive")
-
     flags: set[str] = set()
     has_current_price = current_price is not None and current_price > 0
     if current_price is None:
@@ -150,7 +172,22 @@ def quote(
     elif current_cost <= 0:
         flags.add("invalid_previous_cost")
 
-    def unpriced(cost: Decimal) -> PriceQuote:
+    cost = new_cost
+    try:
+        cost = convert_vat(new_cost, cost_includes_vat, config.prices_include_vat, config.vat_rate)
+    except UnknownVatError:
+        flags.add("unknown_vat")
+
+    if new_cost <= 0:
+        flags.add("invalid_new_cost")
+
+    normalized_currency = (currency or "").strip().upper()
+    if not normalized_currency:
+        flags.add("unknown_currency")
+    elif normalized_currency != PRICED_CURRENCY:
+        flags.add("foreign_currency")
+
+    if flags & BLOCKING_FLAGS:
         return PriceQuote(
             new_cost=cost,
             current_price=current_price,
@@ -161,20 +198,6 @@ def quote(
             current_price_below_min_margin=None,
             flags=frozenset(flags),
         )
-
-    normalized_currency = (currency or "").strip().upper()
-    if not normalized_currency:
-        flags.add("unknown_currency")
-        return unpriced(new_cost)
-    if normalized_currency != PRICED_CURRENCY:
-        flags.add("foreign_currency")
-        return unpriced(new_cost)
-
-    try:
-        cost = convert_vat(new_cost, cost_includes_vat, config.prices_include_vat, config.vat_rate)
-    except UnknownVatError:
-        flags.add("unknown_vat")
-        return unpriced(new_cost)
 
     cost_change = None
     if current_cost is not None and current_cost > 0:
