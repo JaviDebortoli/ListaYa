@@ -155,6 +155,12 @@ class CsvCatalog:
         reader = csv.DictReader(io.StringIO(text, newline=""))
         header = list(reader.fieldnames or [])
         fieldnames = [name.strip() for name in header]
+        if "" in fieldnames:
+            raise CatalogError("every column needs a name in the header")
+        duplicated = sorted({name for name in fieldnames if fieldnames.count(name) > 1})
+        if duplicated:
+            # Rows are keyed by column name, so repeated names would merge columns on rewrite.
+            raise CatalogError(f"duplicate column name(s): {', '.join(duplicated)}")
         missing = [column for column in REQUIRED_COLUMNS if column not in fieldnames]
         if missing:
             raise CatalogError(f"missing required column(s): {', '.join(missing)}")

@@ -176,3 +176,12 @@ class TestRobustness:
         path = write_catalog(tmp_path / "spaced.csv", "1, Martillo, 10, 20\n", header="sku, name, cost, price\n")
         CsvCatalog(path).apply_updates([PriceUpdate(sku="1", cost=D("12"), price=D("30"))])
         assert path.read_text(encoding="utf-8").splitlines() == ["sku, name, cost, price", "1, Martillo,12,30"]
+
+    @pytest.mark.parametrize(
+        "header",
+        ["sku,name,cost,price,notes,notes\n", "sku,name,cost,price,notes, notes\n", "sku,name,cost,price,,\n"],
+    )
+    def test_rejects_duplicate_or_blank_column_names(self, tmp_path: Path, header: str):
+        path = write_catalog(tmp_path / "dup.csv", "1,Martillo,10,20,a,b\n", header=header)
+        with pytest.raises(CatalogError, match="column"):
+            CsvCatalog(path).load()
