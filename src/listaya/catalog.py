@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import stat
 import tempfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -95,10 +96,14 @@ class CsvCatalog:
 
     def apply_updates(self, updates: Iterable[PriceUpdate]) -> None:
         """Write new costs and prices. Validates everything first; on error the file is untouched."""
-        pending = {update.sku: update for update in updates}
-        for update in pending.values():
-            if update.cost <= 0 or update.price <= 0:
-                raise CatalogError(f"sku {update.sku!r}: cost and price must be positive")
+        pending: dict[str, PriceUpdate] = {}
+        for update in updates:
+            if update.sku in pending:
+                raise CatalogError(f"sku {update.sku!r} appears more than once in the update")
+            for value in (update.cost, update.price):
+                if not value.is_finite() or value <= 0:
+                    raise CatalogError(f"sku {update.sku!r}: cost and price must be positive numbers")
+            pending[update.sku] = update
 
         self.load()  # validate the whole file before rewriting it
         fieldnames, rows, raw = self._read()
@@ -129,15 +134,24 @@ class CsvCatalog:
         if missing:
             raise CatalogError(f"missing required column(s): {', '.join(missing)}")
         reader.fieldnames = fieldnames
-        # Line 1 is the header, so the first data row is line 2.
-        rows = [(reader.line_num, dict(row)) for row in reader]
+        rows = []
+        for row in reader:
+            # DictReader puts cells beyond the header under the None key.
+            if row.get(None):  # type: ignore[call-overload]
+                raise CatalogError(f"line {reader.line_num}: more cells than header columns")
+            rows.append((reader.line_num, dict(row)))
         return fieldnames, rows, raw
 
     def _write_atomically(self, data: bytes) -> None:
+        mode = stat.S_IMODE(self.path.stat().st_mode)
         fd, temp_name = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp")
         try:
             with os.fdopen(fd, "wb") as handle:
                 handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # mkstemp creates the file as owner-only; keep the catalog's original permissions.
+            os.chmod(temp_name, mode)
             os.replace(temp_name, self.path)
         except BaseException:
             if os.path.exists(temp_name):

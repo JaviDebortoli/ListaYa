@@ -1,3 +1,5 @@
+import os
+import stat
 from decimal import Decimal
 from pathlib import Path
 
@@ -110,3 +112,48 @@ class TestApplyUpdates:
     def test_leaves_no_temporary_files(self, catalog_path: Path):
         CsvCatalog(catalog_path).apply_updates([PriceUpdate(sku="2232", cost=D("50"), price=D("80"))])
         assert sorted(p.name for p in catalog_path.parent.iterdir()) == ["catalog.csv"]
+
+
+class TestRobustness:
+    def test_rejects_row_with_more_cells_than_header(self, tmp_path: Path):
+        path = write_catalog(tmp_path / "extra.csv", "1,Martillo,10,20,,\n", header="sku,name,cost,price\n")
+        with pytest.raises(CatalogError, match="line 2"):
+            CsvCatalog(path).load()
+
+    @pytest.mark.parametrize("bad", [D("Infinity"), D("NaN"), D("-Infinity")])
+    def test_rejects_non_finite_update_without_writing(self, catalog_path: Path, bad: Decimal):
+        before = catalog_path.read_bytes()
+        with pytest.raises(CatalogError):
+            CsvCatalog(catalog_path).apply_updates([PriceUpdate(sku="2231", cost=D("100"), price=bad)])
+        assert catalog_path.read_bytes() == before
+
+    def test_rejects_duplicate_sku_in_updates_without_writing(self, catalog_path: Path):
+        before = catalog_path.read_bytes()
+        with pytest.raises(CatalogError, match="2231"):
+            CsvCatalog(catalog_path).apply_updates(
+                [
+                    PriceUpdate(sku="2231", cost=D("100"), price=D("1430")),
+                    PriceUpdate(sku="2231", cost=D("101"), price=D("1440")),
+                ]
+            )
+        assert catalog_path.read_bytes() == before
+
+    def test_preserves_bom_and_crlf_line_endings(self, tmp_path: Path):
+        path = tmp_path / "excel.csv"
+        path.write_bytes(b"\xef\xbb\xbfsku,name,cost,price\r\n1,Martillo,10,20\r\n")
+        CsvCatalog(path).apply_updates([PriceUpdate(sku="1", cost=D("12"), price=D("30"))])
+        assert path.read_bytes() == b"\xef\xbb\xbfsku,name,cost,price\r\n1,Martillo,12,30\r\n"
+
+    def test_writes_long_decimals_in_plain_notation(self, catalog_path: Path):
+        cost = D("826.4462809917355371900826446")
+        catalog = CsvCatalog(catalog_path)
+        catalog.apply_updates([PriceUpdate(sku="2231", cost=cost, price=D("1.18E+3"))])
+        text = catalog_path.read_text(encoding="utf-8")
+        assert "826.4462809917355371900826446,1180," in text
+        assert {p.sku: p for p in catalog.load()}["2231"].cost == cost
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions")
+    def test_preserves_file_permissions(self, catalog_path: Path):
+        catalog_path.chmod(0o644)
+        CsvCatalog(catalog_path).apply_updates([PriceUpdate(sku="2231", cost=D("100"), price=D("1430"))])
+        assert stat.S_IMODE(catalog_path.stat().st_mode) == 0o644
