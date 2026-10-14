@@ -1,0 +1,17 @@
+.idea/
+PRD.md
+amd-token-factory-docs.md
+.env
+.atl/
+odd/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local data
+*.db
+*.sqlite3
