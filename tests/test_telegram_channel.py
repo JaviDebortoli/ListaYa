@@ -125,3 +125,38 @@ class TestTelegramChannel:
 def test_adapters_satisfy_the_channel_interface():
     assert isinstance(TelegramChannel(FakeBot()), Channel)
     assert isinstance(FakeChannel(), Channel)
+
+
+class TestDispatch:
+    def test_button_press_reaches_the_handler_even_if_answering_fails(self):
+        from types import SimpleNamespace
+
+        from telegram.error import BadRequest
+
+        from listaya.telegram_channel import dispatch_update
+
+        async def failing_answer(*args, **kwargs):
+            raise BadRequest("Query is too old and response timeout expired or query id is invalid")
+
+        query = SimpleNamespace(
+            data="approve:run-1", message=SimpleNamespace(chat=SimpleNamespace(id=42)), answer=failing_answer
+        )
+        update = SimpleNamespace(callback_query=query, message=None)
+        received: list[IncomingMessage] = []
+
+        async def handler(message: IncomingMessage) -> None:
+            received.append(message)
+
+        run(dispatch_update(update, handler))
+        assert received == [IncomingMessage(chat_id="42", button_data="approve:run-1")]
+
+    def test_unsupported_update_is_not_dispatched(self):
+        from listaya.telegram_channel import dispatch_update
+
+        received = []
+
+        async def handler(message):
+            received.append(message)
+
+        run(dispatch_update(message_update(sticker=None), handler))
+        assert received == []

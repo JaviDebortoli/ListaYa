@@ -56,7 +56,7 @@ def _parse_rows(content: str) -> list[Any] | None:
         return None
     if not isinstance(body, dict):
         return None
-    rows = body.get("rows", [])
+    rows = body.get("rows")
     return rows if isinstance(rows, list) else None
 
 
@@ -111,6 +111,14 @@ class ModelExtractor:
         span = f"lines {batch[0][0]}-{batch[-1][0]}"
         user_text = "\n".join(f"L{n}: {line}" for n, line in batch)
         rows, problem = await self._ask(self._text_model, user_text)
+        line_numbers = {n for n, _ in batch}
+        # A row numbered outside this batch would collide with another batch's lines.
+        rows = [
+            row
+            if row.source_row in line_numbers
+            else dataclasses.replace(row, source_row=batch[0][0], issues=row.issues + ("unknown_source_row",))
+            for row in rows
+        ]
         return rows, f"{span}: {problem}" if problem else None
 
     async def _extract_image(self, content: bytes, mime: str) -> tuple[list[ExtractedRow], str | None]:

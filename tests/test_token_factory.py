@@ -334,3 +334,20 @@ class TestNetworkAndMalformedResponses:
         client, _ = make_client(handler, base_url="https://proxy.example/v1")
         run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
         assert str(seen[0].url) == "https://proxy.example/v1/chat/completions"
+
+
+class TestUsageAccounting:
+    def test_empty_reply_is_recorded_as_empty_with_real_attempts(self):
+        responses = [httpx.Response(503), httpx.Response(200, json=ok_body(content="", finish_reason="length"))]
+        records: list[UsageRecord] = []
+        client, _ = make_client(lambda r: responses.pop(0), on_usage=records.append)
+        with pytest.raises(EmptyResponseError) as excinfo:
+            run(client.chat("MiMo-V2.6-Flash", MESSAGES, max_tokens=10))
+        assert excinfo.value.attempts == 2
+        assert [(r.status, r.attempts, r.prompt_tokens) for r in records] == [("empty", 2, 120)]
+
+    @pytest.mark.parametrize("response", [httpx.Response(200, text="<html>"), httpx.Response(200, json=["x"])])
+    def test_malformed_models_list_is_a_typed_error(self, response):
+        client, _ = make_client(lambda r: response)
+        with pytest.raises(TokenFactoryError, match="malformed"):
+            run(client.list_models())

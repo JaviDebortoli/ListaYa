@@ -2,18 +2,21 @@
 
 - CSV / Excel: parsed with code; the text model is used only when no header is recognized.
 - PDF with a text layer: its text goes to the text model in batches.
-- Scanned PDF: every page is rendered to PNG and read by the vision model.
+- Scanned PDF pages: rendered to PNG for the vision model; text pages of the same PDF
+  still go to the text model.
 - Photo: read by the vision model.
 - Text file or pasted text: text model.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import io
 from pathlib import PurePath
 from typing import Any, Protocol, Sequence
 
 from listaya.extraction.model import ExtractionResult
+from listaya.extraction.rows import ExtractedRow
 from listaya.extraction.spreadsheet import SpreadsheetError, read_table, rows_from_table, table_as_text
 
 MAX_PDF_PAGES = 20
@@ -119,23 +122,36 @@ class ListExtractor:
         if total_pages > MAX_PDF_PAGES:
             notes.append(f"only the first {MAX_PDF_PAGES} of {total_pages} pages were read")
 
-        scanned = any(len("".join(text.split())) < MIN_TEXT_CHARS_PER_PAGE for text in texts)
-        if not scanned:
-            return _with_problems(await self._model.extract_text("\n".join(texts)), notes)
-        try:
-            images = _render_pages(content, len(texts))
-        except Exception as error:
-            return ExtractionResult([], notes + [f"the PDF pages could not be rendered: {error}"])
-        return _with_problems(await self._model.extract_images(images), notes)
+        # Pages with a text layer keep their exact text; only sparse (scanned) pages become images.
+        sparse = [i for i, text in enumerate(texts) if len("".join(text.split())) < MIN_TEXT_CHARS_PER_PAGE]
+        dense_text = "\n".join(text for i, text in enumerate(texts) if i not in sparse)
+
+        rows: list[ExtractedRow] = []
+        problems = list(notes)
+        if dense_text.strip():
+            text_result = await self._model.extract_text(dense_text)
+            rows.extend(text_result.rows)
+            problems.extend(text_result.problems)
+        if sparse:
+            try:
+                images = _render_pages(content, sparse)
+            except Exception as error:
+                return ExtractionResult(rows, problems + [f"the PDF pages could not be rendered: {error}"])
+            image_result = await self._model.extract_images(images)
+            # Number image rows after the text lines so source rows never collide.
+            offset = len(dense_text.splitlines())
+            rows.extend(dataclasses.replace(row, source_row=offset + row.source_row) for row in image_result.rows)
+            problems.extend(image_result.problems)
+        return ExtractionResult(rows, problems)
 
 
-def _render_pages(content: bytes, page_count: int) -> list[tuple[bytes, str]]:
+def _render_pages(content: bytes, page_indexes: Sequence[int]) -> list[tuple[bytes, str]]:
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(content)
     try:
         images = []
-        for index in range(page_count):
+        for index in page_indexes:
             image: Any = pdf[index].render(scale=RENDER_SCALE).to_pil()
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")

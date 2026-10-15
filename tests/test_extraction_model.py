@@ -107,7 +107,7 @@ class TestExtractImages:
         assert [r.source_row for r in result.rows] == [1, 2, 3]
 
     def test_failed_page_is_reported(self):
-        client = FakeChatClient("{}", TokenFactoryError(None, "network error"))
+        client = FakeChatClient({"rows": []}, TokenFactoryError(None, "network error"))
         extractor = ModelExtractor(client, text_model="T", vision_model="V")
 
         result = run(extractor.extract_images([(b"a", "image/png"), (b"b", "image/png")]))
@@ -117,3 +117,23 @@ class TestExtractImages:
     def test_rejects_invalid_batch_size(self):
         with pytest.raises(ValueError):
             ModelExtractor(FakeChatClient(), text_model="T", vision_model="V", batch_lines=0)
+
+
+class TestReplyShape:
+    @pytest.mark.parametrize("reply", ["{}", {"products": [row(1)]}, {"rows": "none"}])
+    def test_reply_without_a_rows_list_is_a_problem(self, reply):
+        client = FakeChatClient(reply)
+        result = run(ModelExtractor(client, text_model="T", vision_model="V").extract_text("a $1"))
+        assert result.rows == []
+        assert result.problems == ["lines 1-1: the model did not return valid JSON"]
+
+    def test_rows_with_a_source_row_outside_the_batch_are_marked(self):
+        # Batch 2 holds lines 3-4; a reply numbering its rows 1 and 4 must not collide with batch 1.
+        client = FakeChatClient({"rows": [row(1), row(2)]}, {"rows": [row(1), row(4)]})
+        extractor = ModelExtractor(client, text_model="T", vision_model="V", batch_lines=2)
+
+        result = run(extractor.extract_text("a $1\nb $2\nc $3\nd $4"))
+
+        assert [r.source_row for r in result.rows] == [1, 2, 3, 4]
+        assert "unknown_source_row" in result.rows[2].issues
+        assert "unknown_source_row" not in result.rows[3].issues

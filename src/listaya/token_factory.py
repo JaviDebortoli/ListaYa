@@ -215,13 +215,16 @@ class TokenFactoryClient:
             raise TokenFactoryError(
                 response.status_code, f"malformed response body: {response.text[:200]!r}", attempts, "malformed"
             ) from None
-        latency = self._record(model, prompt_tokens, completion_tokens, started, attempts, "ok")
-
         content = (choice.get("message") or {}).get("content") or ""
-        if not content.strip():
+        if not isinstance(content, str) or not content.strip():
+            self._record(model, prompt_tokens, completion_tokens, started, attempts, "empty")
             raise EmptyResponseError(
-                200, f"empty content (finish_reason={choice.get('finish_reason')}); raise max_tokens or lower reasoning"
+                200,
+                f"empty content (finish_reason={choice.get('finish_reason')}); raise max_tokens or lower reasoning",
+                attempts,
+                "empty",
             )
+        latency = self._record(model, prompt_tokens, completion_tokens, started, attempts, "ok")
         return ChatResult(
             content=content,
             model=body.get("model", model),
@@ -236,7 +239,12 @@ class TokenFactoryClient:
 
     async def list_models(self) -> list[str]:
         response, _ = await self._send("GET", "models")
-        return [entry["id"] for entry in response.json().get("data", []) if "id" in entry]
+        try:
+            return [entry["id"] for entry in response.json().get("data", []) if "id" in entry]
+        except (ValueError, TypeError, AttributeError):
+            raise TokenFactoryError(
+                response.status_code, f"malformed models list: {response.text[:200]!r}", 1, "malformed"
+            ) from None
 
     async def validate_models(self, names: Iterable[str]) -> None:
         available = set(await self.list_models())

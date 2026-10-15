@@ -146,3 +146,29 @@ class TestRoutes:
     def test_unsupported_file_is_reported(self):
         result = run(ListExtractor(FakeModelExtractor()).extract_file(b"x", "raro.zip", "application/zip"))
         assert result.problems == ["unsupported file type: send a PDF, Excel/CSV, photo or text"]
+
+
+class TestMixedAndBrokenFiles:
+    def test_mixed_pdf_reads_text_pages_as_text_and_only_sparse_pages_as_images(self):
+        model = FakeModelExtractor()
+        content = pdf_bytes("Tornillo 6x1 1.234,56 " * 3, "", "Tarugo 8mm 40,00 " * 3)
+        result = run(ListExtractor(model).extract_file(content, "mixto.pdf", None))
+        assert len(model.texts) == 1 and "Tarugo 8mm" in model.texts[0]
+        assert len(model.images) == 1 and len(model.images[0]) == 1
+        # Image rows are numbered after the text lines so source rows never collide.
+        rows = sorted(r.source_row for r in result.rows)
+        assert len(rows) == len(set(rows))
+
+    def test_workbook_failing_while_reading_sheets_is_reported(self, monkeypatch):
+        import openpyxl
+
+        class BrokenWorkbook:
+            worksheets = property(lambda self: (_ for _ in ()).throw(ValueError("bad sheet xml")))
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(openpyxl, "load_workbook", lambda *a, **k: BrokenWorkbook())
+        result = run(ListExtractor(FakeModelExtractor()).extract_file(b"PK", "lista.xlsx", None))
+        assert result.rows == []
+        assert "bad sheet xml" in result.problems[0]

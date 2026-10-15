@@ -86,11 +86,16 @@ def _read_xlsx(content: bytes) -> tuple[list[list[Any]], list[str]]:
         raise SpreadsheetError(f"the Excel file could not be read: {error}") from error
 
     with_data: list[tuple[str, list[list[Any]]]] = []
-    for sheet in workbook.worksheets:
-        rows = [_trim(list(row)) for row in sheet.iter_rows(values_only=True)]
-        if any(rows):
-            with_data.append((sheet.title, rows))
-    workbook.close()
+    try:
+        # Read-only workbooks parse sheet XML lazily, so malformed files can also fail here.
+        for sheet in workbook.worksheets:
+            rows = [_trim(list(row)) for row in sheet.iter_rows(values_only=True)]
+            if any(rows):
+                with_data.append((sheet.title, rows))
+    except Exception as error:
+        raise SpreadsheetError(f"the Excel file could not be read: {error}") from error
+    finally:
+        workbook.close()
 
     if not with_data:
         return [], []

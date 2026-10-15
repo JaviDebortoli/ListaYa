@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Sequence
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import TelegramError
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from listaya.channel import MAX_DOWNLOAD_BYTES, Attachment, Button, FileTooLargeError, IncomingMessage
 from listaya.channel import MessageHandler as IncomingHandler
+
+logger = logging.getLogger(__name__)
 
 
 def to_incoming(update: Update) -> IncomingMessage | None:
@@ -65,18 +69,27 @@ class TelegramChannel:
         return bytes(await telegram_file.download_as_bytearray())
 
 
+async def dispatch_update(update: Update, handler: IncomingHandler) -> None:
+    if update.callback_query is not None:
+        try:
+            await update.callback_query.answer()  # stop the button's loading spinner
+        except TelegramError as error:
+            # Best effort: a press delivered late (e.g. after a restart) can no longer be answered,
+            # but it must still reach the handler, or an approval would be lost.
+            logger.warning("could not answer callback query: %s", error)
+    incoming = to_incoming(update)
+    if incoming is None:
+        return
+    await handler(incoming)
+
+
 def build_application(token: str, handler: IncomingHandler) -> Application:
     """Create the bot application wired to a channel-neutral message handler."""
     # concurrent_updates: a long-running list must not block other merchants' messages.
     application = Application.builder().token(token).concurrent_updates(True).build()
 
     async def on_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if update.callback_query is not None:
-            await update.callback_query.answer()  # stop the button's loading spinner
-        incoming = to_incoming(update)
-        if incoming is None:
-            return
-        await handler(incoming)
+        await dispatch_update(update, handler)
 
     application.add_handler(
         MessageHandler(filters.TEXT | filters.Document.ALL | filters.PHOTO, on_update)
