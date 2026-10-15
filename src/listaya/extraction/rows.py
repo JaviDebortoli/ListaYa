@@ -96,13 +96,18 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
+def _finite_decimal(value: int | float | Decimal) -> Decimal | None:
+    number = Decimal(str(value))
+    return number if number.is_finite() else None
+
+
 def _positive_number(value: Any) -> Decimal | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float, Decimal)):
-        if isinstance(value, float) and not math.isfinite(value):
+        number = _finite_decimal(value)
+        if number is None:
             return None
-        number = Decimal(str(value))
     elif isinstance(value, str):
         number = parse_amount(value)
         if number is None:
@@ -131,12 +136,15 @@ def validate_rows(items: Iterable[Any]) -> list[ExtractedRow]:
         if description is None:
             issues.append("missing_description")
 
-        raw_cost = _text(item.get("unit_cost_text"))
+        cost_value = item.get("unit_cost_text")
+        raw_cost = _text(cost_value)
         unit_cost = None
         if raw_cost is None:
             issues.append("missing_cost")
         else:
-            unit_cost = parse_amount(raw_cost)
+            # Real numbers (spreadsheet cells) are already numbers; only text goes through the Argentine parser.
+            is_number = isinstance(cost_value, (int, float, Decimal)) and not isinstance(cost_value, bool)
+            unit_cost = _finite_decimal(cost_value) if is_number else parse_amount(raw_cost)
             if unit_cost is None:
                 issues.append("unparseable_cost")
             elif unit_cost <= 0:

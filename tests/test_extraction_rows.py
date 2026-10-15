@@ -119,3 +119,9 @@ class TestValidateRows:
     def test_missing_source_row_uses_position(self):
         rows = validate_rows([raw(source_row=None), raw(source_row="x")])
         assert [r.source_row for r in rows] == [1, 2]
+
+    @pytest.mark.parametrize("value, expected", [(1.234, "1.234"), (Decimal("1234.5"), "1234.5"), (85, "85")])
+    def test_numeric_cell_values_are_taken_as_numbers_not_reparsed_as_text(self, value, expected):
+        # A spreadsheet number 1.234 is one peso and change, not "1.234" written with a thousands dot.
+        [row] = validate_rows([raw(unit_cost_text=value)])
+        assert row.unit_cost == D(expected)
