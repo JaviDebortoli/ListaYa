@@ -32,6 +32,7 @@ _PRICE_STATEMENT_LINE = re.compile(r"\b(precio|precios|lista|valores|importes|pr
 # Short standalone lines ("IVA incluido", "+ IVA") also state it, unless they are about another charge.
 _STANDALONE_MAX_WORDS = 4
 _OTHER_CHARGE = re.compile(r"\b(flete|fletes|envio|envios|shipping|freight|delivery)\b")
+_EXCEPTION = re.compile(r"\b(excepto|salvo|menos|except|excluding)\b")
 
 
 def vat_statement(text: str) -> bool | None:
@@ -44,22 +45,30 @@ def vat_statement(text: str) -> bool | None:
 
 
 def list_vat_statement(text: str) -> bool | None:
-    """VAT convention stated by a whole list.
+    """VAT convention stated by a whole list, or None when it does not say or contradicts itself.
 
-    Read from lines about its prices ("Precios + IVA") and from short standalone lines
-    ("IVA incluido", or "+ IVA" under a "LISTA DE PRECIOS" title), ignoring lines about
-    other charges ("Flete + IVA"). None when no line states it or when they disagree.
+    Lines about the list's prices ("Precios + IVA", even "Precios con IVA, flete incluido")
+    decide first. Only when none of them states VAT do short standalone lines count
+    ("IVA incluido", or "+ IVA" under a "LISTA DE PRECIOS" title), and never short lines
+    with an amount, an exception ("Excepto herramientas: + IVA") or another charge ("Flete + IVA").
     """
-    statements = set()
+    price_lines: set[bool] = set()
+    short_lines: set[bool] = set()
     for line in text.splitlines():
-        plain = unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode("ascii").lower()
-        if _OTHER_CHARGE.search(plain):
+        statement = vat_statement(line)
+        if statement is None:
             continue
-        standalone = len(re.findall(r"\w+", plain)) <= _STANDALONE_MAX_WORDS
-        if standalone or _PRICE_STATEMENT_LINE.search(plain):
-            statement = vat_statement(line)
-            if statement is not None:
-                statements.add(statement)
+        plain = unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode("ascii").lower()
+        if _PRICE_STATEMENT_LINE.search(plain):
+            price_lines.add(statement)
+        elif (
+            len(re.findall(r"[a-z]+", plain)) <= _STANDALONE_MAX_WORDS
+            and not re.search(r"\d", plain)
+            and not _OTHER_CHARGE.search(plain)
+            and not _EXCEPTION.search(plain)
+        ):
+            short_lines.add(statement)
+    statements = price_lines or short_lines
     return statements.pop() if len(statements) == 1 else None
 
 

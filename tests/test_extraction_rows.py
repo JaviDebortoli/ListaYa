@@ -210,3 +210,19 @@ def test_list_vat_statement_also_reads_short_standalone_lines(text, expected):
     from listaya.extraction.rows import list_vat_statement
 
     assert list_vat_statement(text) is expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("Precios + IVA - Envío sin cargo\nTornillo $10", False),  # a price line mentioning shipping still counts
+        ("Precios con IVA, flete incluido\nTornillo $10", True),
+        ("Precios con IVA incluido\nExcepto herramientas: + IVA\nTornillo $10", True),  # price line wins over exceptions
+        ("Lista octubre\nTaladro s/IVA $500\nTornillo $10", None),  # a short product row with an amount is not a statement
+        ("Lista octubre\nSalvo herramientas + IVA\nTornillo $10", None),
+    ],
+)
+def test_list_vat_statement_prefers_price_lines_over_short_lines(text, expected):
+    from listaya.extraction.rows import list_vat_statement
+
+    assert list_vat_statement(text) is expected
