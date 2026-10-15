@@ -1,0 +1,170 @@
+"""The extraction contract: one validated row per product line of a supplier list.
+
+Rows come from code (spreadsheets) or from a model (images, PDFs, text). Either
+way they pass through validate_rows, which parses amounts with code and marks
+anything missing or unreadable instead of filling it in.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from typing import Any, Iterable
+
+CURRENCIES = frozenset({"ARS", "USD"})
+
+_CURRENCY_TOKENS = re.compile(r"(?i)(u\$s|us\$|ar\$|ars|usd|\$)")
+_DIGITS_AND_SEPARATORS = re.compile(r"\d[\d.,]*")
+
+
+@dataclass(frozen=True)
+class ExtractedRow:
+    supplier_code: str | None
+    description: str
+    pack_size: Decimal | None
+    unit: str | None
+    unit_cost: Decimal | None
+    currency: str | None
+    includes_vat: bool | None
+    source_row: int
+    confidence: float
+    raw_cost: str | None  # the cost exactly as it appeared, for showing doubtful rows to the merchant
+    issues: tuple[str, ...] = ()
+
+
+def _grouped(integer_part: str, separator: str) -> bool:
+    """True if integer_part is digits with optional thousands groups using separator (1.234.567)."""
+    if separator not in integer_part:
+        return integer_part.isdigit()
+    return re.fullmatch(rf"\d{{1,3}}(?:{re.escape(separator)}\d{{3}})+", integer_part) is not None
+
+
+def parse_amount(text: str) -> Decimal | None:
+    """Parse a price as written in an Argentine list: '$ 1.234,56' -> 1234.56. None if unreadable.
+
+    Comma is the decimal separator and dot the thousands separator; when both
+    appear, the last one is the decimal separator (so '1,234.56' also works).
+    A lone dot followed by exactly three digits ('1.234') is a thousands separator.
+    """
+    cleaned = _CURRENCY_TOKENS.sub("", text).replace(" ", "").replace(" ", "")
+    if not _DIGITS_AND_SEPARATORS.fullmatch(cleaned):
+        return None
+
+    last_dot, last_comma = cleaned.rfind("."), cleaned.rfind(",")
+    if last_dot >= 0 and last_comma >= 0:
+        decimal_sep = "." if last_dot > last_comma else ","
+        thousands_sep = "," if decimal_sep == "." else "."
+        integer_part, _, fraction = cleaned.rpartition(decimal_sep)
+        if decimal_sep in integer_part or not fraction.isdigit() or not _grouped(integer_part, thousands_sep):
+            return None
+        normalized = integer_part.replace(thousands_sep, "") + "." + fraction
+    elif last_comma >= 0:
+        if cleaned.count(",") == 1:
+            integer_part, _, fraction = cleaned.partition(",")
+            if not fraction.isdigit():
+                return None
+            normalized = integer_part + "." + fraction
+        elif _grouped(cleaned, ","):
+            normalized = cleaned.replace(",", "")
+        else:
+            return None
+    elif last_dot >= 0:
+        if cleaned.count(".") > 1 or re.fullmatch(r"[1-9]\d{0,2}\.\d{3}", cleaned):
+            if not _grouped(cleaned, "."):
+                return None
+            normalized = cleaned.replace(".", "")
+        else:
+            integer_part, _, fraction = cleaned.partition(".")
+            if not fraction.isdigit():
+                return None
+            normalized = cleaned
+    else:
+        normalized = cleaned
+
+    try:
+        return Decimal(normalized)
+    except InvalidOperation:
+        return None
+
+
+def _text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _positive_number(value: Any) -> Decimal | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        number = Decimal(str(value))
+    elif isinstance(value, str):
+        number = parse_amount(value)
+        if number is None:
+            return None
+    else:
+        return None
+    return number if number.is_finite() and number > 0 else None
+
+
+def _confidence(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0.0
+    value = float(value)
+    return value if math.isfinite(value) and 0.0 <= value <= 1.0 else 0.0
+
+
+def validate_rows(items: Iterable[Any]) -> list[ExtractedRow]:
+    """Validate raw row dicts (from a model or a spreadsheet) into ExtractedRow values."""
+    rows: list[ExtractedRow] = []
+    for position, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        issues: list[str] = []
+
+        description = _text(item.get("description"))
+        if description is None:
+            issues.append("missing_description")
+
+        raw_cost = _text(item.get("unit_cost_text"))
+        unit_cost = None
+        if raw_cost is None:
+            issues.append("missing_cost")
+        else:
+            unit_cost = parse_amount(raw_cost)
+            if unit_cost is None:
+                issues.append("unparseable_cost")
+            elif unit_cost <= 0:
+                issues.append("non_positive_cost")
+
+        pack_size = None
+        if item.get("pack_size") is not None:
+            pack_size = _positive_number(item.get("pack_size"))
+            if pack_size is None:
+                issues.append("invalid_pack_size")
+
+        currency = (_text(item.get("currency")) or "").upper()
+        includes_vat = item.get("includes_vat")
+        source_row = item.get("source_row")
+
+        rows.append(
+            ExtractedRow(
+                supplier_code=_text(item.get("supplier_code")),
+                description=description or "",
+                pack_size=pack_size,
+                unit=_text(item.get("unit")),
+                unit_cost=unit_cost,
+                currency=currency if currency in CURRENCIES else None,
+                includes_vat=includes_vat if isinstance(includes_vat, bool) else None,
+                source_row=source_row if isinstance(source_row, int) and not isinstance(source_row, bool) else position,
+                confidence=_confidence(item.get("confidence")),
+                raw_cost=raw_cost,
+                issues=tuple(issues),
+            )
+        )
+    return rows
