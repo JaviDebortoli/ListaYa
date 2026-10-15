@@ -8,13 +8,11 @@
 | `hardware-store/southern_fasteners.csv` | A supplier list as a spreadsheet, prices excluding VAT | Code-only route (no model): header below a title, section rows, price increases, margin alerts, an ambiguous line ("SELF-DRILLING SCREW" with no size) and a new product (12 mm anchor) |
 | `hardware-store/northside_distributors.txt` | A supplier list pasted as text, prices including 21% VAT | Text-model route: messy formatting, VAT to remove, a thousands separator (`$ 1,089.00`), a "call for price" line and a new product (bench grinder) |
 
-Settings for this sample (see the main README):
+These lists use US dollars and a dot as decimal separator, so tell the extraction command so:
 
-```
-LISTAYA_CATALOG_PATH=samples/hardware-store/catalog.csv
-LISTAYA_CURRENCY=USD
-LISTAYA_DECIMAL_SEPARATOR=.
-LISTAYA_ROUNDING_STEP=0.05
+```bash
+python -m listaya.extraction_check samples/hardware-store/southern_fasteners.csv --currency USD --decimal-separator .
+python -m listaya.extraction_check samples/hardware-store/northside_distributors.txt --currency USD --decimal-separator .
 ```
 
-Approving a list rewrites the catalog file, so use a copy if you want to keep the original.
+Without those options the command assumes Argentine lists (pesos, decimal comma). The bot does not read a currency or number format setting yet; that arrives when list processing is wired into the bot.

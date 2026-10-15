@@ -42,7 +42,7 @@ python -m venv .venv
 .venv/Scripts/python -m listaya.extraction_check lista.pdf   # extrae una lista y muestra filas, tokens y tiempo
 ```
 
-`extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`).
+`extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`). Por defecto asume listas argentinas (pesos y coma decimal); para listas en dólares con punto decimal, agregá `--currency USD --decimal-separator .`.
 
 ## Datos de ejemplo
 

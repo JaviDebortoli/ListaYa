@@ -3,6 +3,7 @@
     python -m listaya.extraction_check lista.pdf
     python -m listaya.extraction_check foto.jpg --vision-model MiMo-V2.6-Flash
     python -m listaya.extraction_check --text "Tornillo 6x1 $1.234,56"
+    python -m listaya.extraction_check samples/hardware-store/northside_distributors.txt --currency USD --decimal-separator .
 
 Prints every extracted row with its issues, the problems found, and the
 tokens, cost-relevant usage and time spent. Reads RADEON_API_KEY from .env.
@@ -18,6 +19,7 @@ from pathlib import Path
 
 from listaya.extraction.model import ModelExtractor
 from listaya.extraction.router import ListExtractor
+from listaya.extraction.rows import CURRENCIES, ListFormat
 from listaya.token_factory import DEFAULT_BASE_URL, TokenFactoryClient, UsageRecord
 
 DEFAULT_TEXT_MODEL = "DeepSeek-V4-Flash"
@@ -34,7 +36,11 @@ async def run(args: argparse.Namespace) -> None:
         base_url=os.environ.get("TOKEN_FACTORY_BASE_URL", "").strip() or DEFAULT_BASE_URL,
         on_usage=usage.append,
     )
-    extractor = ListExtractor(ModelExtractor(client, text_model=args.text_model, vision_model=args.vision_model))
+    list_format = list_format_from_args(args)
+    model = ModelExtractor(
+        client, text_model=args.text_model, vision_model=args.vision_model, list_format=list_format
+    )
+    extractor = ListExtractor(model, list_format)
     started = time.monotonic()
     try:
         if args.text is not None:
@@ -63,16 +69,30 @@ async def run(args: argparse.Namespace) -> None:
     )
 
 
-def main() -> None:
-    from dotenv import load_dotenv
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("file", nargs="?", help="supplier list: PDF, Excel/CSV, image or .txt")
     source.add_argument("--text", help="pasted list text instead of a file")
     parser.add_argument("--text-model", default=DEFAULT_TEXT_MODEL)
     parser.add_argument("--vision-model", default=DEFAULT_VISION_MODEL)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--currency", choices=sorted(CURRENCIES), default="ARS", help='what a bare "$" means (default: ARS)'
+    )
+    parser.add_argument(
+        "--decimal-separator", choices=[",", "."], default=",", help="decimal separator of the list (default: ,)"
+    )
+    return parser
+
+
+def list_format_from_args(args: argparse.Namespace) -> ListFormat:
+    return ListFormat(decimal_separator=args.decimal_separator, local_currency=args.currency)
+
+
+def main() -> None:
+    from dotenv import load_dotenv
+
+    args = build_parser().parse_args()
     load_dotenv()
     asyncio.run(run(args))
 
