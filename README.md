@@ -37,6 +37,7 @@ python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"   # en Linux/macOS: .venv/bin/python
 .venv/Scripts/python -m pytest                    # pruebas
 .venv/Scripts/python -m listaya                   # inicia el bot
+.venv/Scripts/python -m listaya.token_factory_check   # verifica el acceso a AMD Token Factory
 ```
 
 ## Licencia
