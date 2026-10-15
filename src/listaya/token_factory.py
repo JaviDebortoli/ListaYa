@@ -22,15 +22,9 @@ RETRYABLE_STATUSES = frozenset({429, 502, 503})
 # Failures before the request reached the model: safe to retry like a 502/503.
 # Read timeouts and responses dropped midway are not: the request may already be
 # processed and billed, so retrying could pay twice.
+# httpx reports a stale pooled connection and a request processed then dropped with the same
+# RemoteProtocolError, so it is not retried either: an error is better than paying twice.
 RETRYABLE_TRANSPORT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
-# What httpx says when the server had already closed a pooled connection before our request.
-_STALE_CONNECTION = "without sending a response"
-
-
-def _never_reached_the_model(error: httpx.TransportError) -> bool:
-    if isinstance(error, RETRYABLE_TRANSPORT_ERRORS):
-        return True
-    return isinstance(error, httpx.RemoteProtocolError) and _STALE_CONNECTION in str(error)
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -287,7 +281,7 @@ class TokenFactoryClient:
                 async with self._semaphore:
                     response = await self._http.request(method, path, **kwargs)
             except httpx.TransportError as error:
-                if not _never_reached_the_model(error):
+                if not isinstance(error, RETRYABLE_TRANSPORT_ERRORS):
                     raise TokenFactoryError(None, f"network error: {error!r}", attempt, "network") from error
                 if attempt == self._max_attempts:
                     raise RetriesExhaustedError(None, f"network error: {error!r}", attempt, "network") from error

@@ -255,3 +255,66 @@ class TestFailures:
     def test_other_text_gets_help(self, env):
         send(env, text="hola")
         assert last(env).text.startswith("Hola, soy ListaYa.")
+
+
+class TestRobustness:
+    def test_failure_after_matching_tells_the_merchant_and_frees_the_chat(self, env, monkeypatch):
+        import listaya.assistant as module
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("pricing exploded")
+
+        monkeypatch.setattr(module, "price_items", broken)
+        send(env, **file_message())
+        assert last(env).text == "No pude procesar la lista por un error. Probá de nuevo en unos minutos."
+        send(env, text="hola")
+        assert last(env).text.startswith("Hola, soy ListaYa.")  # not "still processing"
+
+    def test_failed_acknowledgement_does_not_lock_the_chat(self, env):
+        original = env.channel.send_text
+        calls = {"n": 0}
+
+        async def flaky(chat_id, text):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("telegram timeout")
+            await original(chat_id, text)
+
+        env.channel.send_text = flaky
+        send(env, **file_message())
+        assert last(env).text.startswith("Listo, procesé la lista de Bulonera Sur")
+
+    def test_new_list_replaces_the_open_one(self, env):
+        send(env, **file_message())
+        send(env, **file_message(caption="Distribuidora Norte"))
+        assert "Descarté la lista anterior de Bulonera Sur sin cambiar precios." in texts(env)
+        assert env.store.run(1).status == "replaced"
+        assert last(env).text.startswith("Listo, procesé la lista de Distribuidora Norte")
+
+    def test_run_expires_after_24_hours(self, env):
+        now = {"t": 1_000_000.0}
+        env.assistant._clock = lambda: now["t"]
+        send(env, **file_message())
+        now["t"] += 24 * 60 * 60 + 1
+        press(env, "Aprobar")
+        assert last(env).text == "Esa lista venció porque pasaron más de 24 horas. Mandala de nuevo para procesarla."
+        assert catalog_prices(env)["1001"] == D("6000")
+
+    def test_catalog_write_failure_keeps_the_run_and_hides_internal_details(self, env, monkeypatch):
+        from listaya.catalog import CatalogError
+
+        send(env, **file_message())
+
+        def locked(updates):
+            raise CatalogError(f"permission denied: {env.catalog_path}")
+
+        monkeypatch.setattr(env.assistant._catalog, "apply_updates", locked)
+        press(env, "Aprobar")
+        assert last(env).text == (
+            "No pude actualizar tu catálogo (¿está abierto en otro programa?). No cambié ningún precio. "
+            "Probá aprobar de nuevo en un momento."
+        )
+        assert str(env.catalog_path) not in last(env).text
+        monkeypatch.undo()
+        send(env, text="ok")  # the run is still waiting for approval
+        assert last(env).text == "Listo, actualicé 2 precios en tu catálogo."

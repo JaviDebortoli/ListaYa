@@ -57,7 +57,10 @@ NO_ROWS = "No encontré productos con precio en la lista. ¿Podés mandarla de n
 FILE_TOO_LARGE = "El archivo pesa más de 20 MB y Telegram no me deja descargarlo. ¿Podés mandarlo más liviano?"
 BUDGET = "Se agotó el cupo diario de IA para leer listas. Se renueva a las 13:00; probá de nuevo después."
 FAILED = "No pude procesar la lista por un error. Probá de nuevo en unos minutos."
-CATALOG_FAILED = "No pude actualizar tu catálogo: {reason}. No cambié ningún precio."
+CATALOG_FAILED = (
+    "No pude actualizar tu catálogo (¿está abierto en otro programa?). No cambié ningún precio. "
+    "Probá aprobar de nuevo en un momento."
+)
 
 # Known extraction problems, translated for the merchant.
 _PROBLEM_MESSAGES = [
@@ -198,17 +201,24 @@ class Assistant:
 
     async def _start_processing(self, chat: str, session: Session, source: Any, supplier: str) -> None:
         session.state, session.pending = "processing", None
-        await self._channel.send_text(chat, ACK.format(supplier=supplier))
+        try:
+            await self._channel.send_text(chat, ACK.format(supplier=supplier))
+        except Exception:
+            # The acknowledgement is a courtesy: never let a failed send leave the chat stuck.
+            logger.warning("could not acknowledge the list in chat %s", chat, exc_info=True)
         # Process in the background so the bot keeps answering while the list is read (PRD 7.4).
         task = asyncio.create_task(self._process(chat, session, source, supplier))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
     async def _process(self, chat: str, session: Session, source: Attachment | str, supplier: str) -> None:
-        name = (source.file_name or "archivo") if isinstance(source, Attachment) else "texto pegado"
-        run_id = self._store.start_run(chat, supplier, name)
-        token = current_run_id.set(run_id)
+        """Background work for one list. Any failure frees the chat and tells the merchant."""
+        run_id: int | None = None
+        token: contextvars.Token[int | None] | None = None
         try:
+            name = (source.file_name or "archivo") if isinstance(source, Attachment) else "texto pegado"
+            run_id = self._store.start_run(chat, supplier, name)
+            token = current_run_id.set(run_id)
             if isinstance(source, Attachment):
                 content = await self._channel.download_file(source)
                 result = await self._extractor.extract_file(content, source.file_name, source.mime_type)
@@ -218,44 +228,48 @@ class Assistant:
             if not rows:
                 self._store.finish_run(run_id, "empty", rows=0, matched=0, priced=0, alerts=0, unmatched=0)
                 async with session.lock:
-                    session.state = "idle"
+                    self._close_run(session)
                 await self._channel.send_text(chat, describe_problem(result.problems))
                 return
-            catalog = self._catalog.load()
-            matcher = self._matcher_factory(catalog)
+            matcher = self._matcher_factory(self._catalog.load())
             results = await matcher.match(normalize_supplier(supplier), rows)
+
+            run = Run(
+                id=run_id,
+                supplier=supplier,
+                supplier_id=normalize_supplier(supplier),
+                created_at=self._clock(),
+                results=results,
+                problems=result.problems,
+                questions=[i for i, r in enumerate(results) if r.status == MatchStatus.NEEDS_CONFIRMATION],
+            )
+            self._matchers[run_id] = matcher
+            async with session.lock:
+                session.run = run
+                await self._advance(chat, session)
         except FileTooLargeError:
             await self._fail(chat, session, run_id, FILE_TOO_LARGE)
-            return
         except BudgetExhaustedError:
             await self._fail(chat, session, run_id, BUDGET)
-            return
         except Exception:
-            logger.exception("processing run %s failed", run_id)
+            logger.exception("processing list for chat %s (run %s) failed", chat, run_id)
             await self._fail(chat, session, run_id, FAILED)
-            return
         finally:
-            current_run_id.reset(token)
+            if token is not None:
+                current_run_id.reset(token)
 
-        run = Run(
-            id=run_id,
-            supplier=supplier,
-            supplier_id=normalize_supplier(supplier),
-            created_at=self._clock(),
-            results=results,
-            problems=result.problems,
-            questions=[i for i, r in enumerate(results) if r.status == MatchStatus.NEEDS_CONFIRMATION],
-        )
-        self._matchers[run_id] = matcher
+    async def _fail(self, chat: str, session: Session, run_id: int | None, message: str) -> None:
+        try:
+            if run_id is not None:
+                self._store.finish_run(run_id, "failed", rows=0, matched=0, priced=0, alerts=0, unmatched=0)
+        except Exception:
+            logger.exception("could not record the failure of run %s", run_id)
         async with session.lock:
-            session.run = run
-            await self._advance(chat, session)
-
-    async def _fail(self, chat: str, session: Session, run_id: int, message: str) -> None:
-        self._store.finish_run(run_id, "failed", rows=0, matched=0, priced=0, alerts=0, unmatched=0)
-        async with session.lock:
-            session.state = "idle"
-        await self._channel.send_text(chat, message)
+            self._close_run(session)
+        try:
+            await self._channel.send_text(chat, message)
+        except Exception:
+            logger.exception("could not tell chat %s about the failure", chat)
 
     async def _advance(self, chat: str, session: Session) -> None:
         """Ask the next pending question, or send the summary when none is left."""
@@ -379,7 +393,8 @@ class Assistant:
             self._catalog.apply_updates(updates)
         except (CatalogError, OSError) as error:
             logger.warning("catalog update for run %s failed: %s", run.id, error)
-            await self._channel.send_text(chat, CATALOG_FAILED.format(reason=error))
+            # Details stay in the log: the error can include local paths.
+            await self._channel.send_text(chat, CATALOG_FAILED)
             return
         self._store.set_run_status(run.id, "applied", updated=len(updates))
         self._close_run(session)
