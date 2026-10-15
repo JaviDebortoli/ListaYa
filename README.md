@@ -15,6 +15,19 @@ Proyecto del equipo YOLO para el AMD Developer Hackathon: ACT III (track Reinven
 
 La lectura de listas (fotos, PDFs escaneados y texto desordenado) y la resolución de emparejamientos dudosos usan modelos abiertos servidos en GPUs de AMD mediante AMD Token Factory (API compatible con OpenAI). Los precios y márgenes los calcula código determinístico con pruebas automáticas; el modelo nunca los calcula.
 
+## Resultados medidos
+
+Benchmark del 16/10/2026 sobre las 5 listas de ejemplo (planilla, texto pegado, PDF con texto, foto y PDF escaneado), con DeepSeek-V4-Flash para texto y DeepSeek-V4.1-Flash para imágenes en AMD Token Factory:
+
+| Métrica | Resultado |
+|---|---|
+| Filas extraídas correctamente (descripción, costo e IVA) | 46 de 46 (100%) |
+| Llamadas al modelo | 4 (la planilla se lee solo con código) |
+| Costo total | USD 0,0012 (unos USD 0,0003 por lista leída con IA) |
+| Tiempo por lista leída con IA | entre 24 y 36 segundos |
+
+Comparación de modelos de visión sobre la foto y el escaneo: DeepSeek-V4.1-Flash 14/14, Qwen3.8-Flash-Next 14/14 (el doble de costo), MiMo-V2.6-Flash 0/14.
+
 ## Estado
 
 En desarrollo para la entrega del 18 de octubre de 2026. El flujo completo funciona por Telegram: recibir la lista, preguntar las dudas, resumir y actualizar el catálogo al aprobar.
@@ -57,7 +70,11 @@ python -m venv .venv
 .venv/Scripts/python -m listaya                   # inicia el bot
 .venv/Scripts/python -m listaya.token_factory_check   # verifica el acceso a AMD Token Factory
 .venv/Scripts/python -m listaya.extraction_check lista.pdf   # extrae una lista y muestra filas, tokens y tiempo
+.venv/Scripts/python -m listaya.benchmark          # precisión, tiempo y costo sobre las listas de ejemplo
+.venv/Scripts/python -m listaya.metrics            # métricas de cada lista procesada por el bot
 ```
+
+`benchmark` compara cada lista de ejemplo con su resultado esperado (`samples/ferreteria/esperado.json`): una fila es correcta si coinciden la descripción, el costo y el IVA. `metrics` lee la base SQLite del bot; los segundos de cada lista van desde que llega hasta que se envía el resumen, así que incluyen el tiempo que el comerciante tarda en contestar las preguntas.
 
 `extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`). Por defecto asume listas argentinas (pesos y coma decimal); para listas en dólares con punto decimal, agregá `--currency USD --decimal-separator .`.
 

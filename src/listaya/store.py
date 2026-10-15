@@ -163,6 +163,21 @@ class SqliteStore:
                 ),
             )
 
+    def run_ids(self) -> list[int]:
+        with self._connect() as db:
+            return [row[0] for row in db.execute("SELECT id FROM runs ORDER BY id")]
+
+    def usage_by_model(self, run_id: int) -> list[tuple[str, int, int]]:
+        """(model, prompt tokens, completion tokens) used by a run, per model."""
+        with self._connect() as db:
+            return list(
+                db.execute(
+                    "SELECT model, SUM(prompt_tokens), SUM(completion_tokens) FROM usage_log "
+                    "WHERE run_id = ? GROUP BY model ORDER BY model",
+                    (run_id,),
+                )
+            )
+
     def run(self, run_id: int) -> RunRecord | None:
         with self._connect() as db:
             row = db.execute(
