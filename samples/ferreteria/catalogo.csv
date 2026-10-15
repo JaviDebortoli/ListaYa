@@ -1,0 +1,26 @@
+sku,name,unit,pack_size,cost,price,category
+1001,Tornillo autoperforante 6x1,caja,100,4200,6000,tornillos
+1002,Tornillo autoperforante 6x2,caja,100,4900,7000,tornillos
+1003,Tornillo madera 8x1.5,caja,100,3800,5450,tornillos
+1004,Tornillo drywall 6x1,caja,100,3100,4450,tornillos
+1101,Tarugo nylon 6 mm,bolsa,100,1500,2150,tarugos
+1102,Tarugo nylon 8 mm,bolsa,100,2100,3000,tarugos
+1103,Tarugo nylon 10 mm,bolsa,50,2300,3300,tarugos
+1201,Clavo punta paris 2,kg,,3600,5150,clavos
+1202,Clavo punta paris 2.5,kg,,3500,5000,clavos
+1301,Martillo carpintero 27 mm,unidad,,9800,14000,herramientas
+1302,Destornillador plano 6 mm,unidad,,2600,3700,herramientas
+1303,Pinza universal 8,unidad,,8700,12450,herramientas
+1304,Cinta metrica 5 m,unidad,,4300,6150,herramientas
+1401,Cinta aisladora 20 m,unidad,,950,1350,electricidad
+1402,Cable unipolar 2.5 mm rollo 100 m,rollo,,58000,79000,electricidad
+1403,Toma corriente doble,unidad,,2300,3300,electricidad
+1501,Silicona transparente 280 ml,unidad,,3900,5550,adhesivos
+1502,Pegamento contacto 250 ml,unidad,,4600,6550,adhesivos
+1601,Lija al agua grano 120,unidad,,520,750,abrasivos
+1602,Lija al agua grano 220,unidad,,520,750,abrasivos
+1701,Teflon 3/4 x 10 m,unidad,,480,700,plomeria
+1702,Canilla esferica 1/2,unidad,,6800,9700,plomeria
+1801,Pintura latex interior blanco 4 l,unidad,,21000,30000,pinturas
+1802,Rodillo lana 22 cm,unidad,,5200,7450,pinturas
+1803,Pincel cerda 2,unidad,,1900,2700,pinturas

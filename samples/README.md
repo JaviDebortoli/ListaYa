@@ -1,18 +1,18 @@
-# Sample data
+# Datos de ejemplo
 
-**Fictional** data for a demo hardware store and two made-up suppliers, in English and US dollars. They do not belong to any real business; they exist to try ListaYa end to end.
+Datos **ficticios** de una ferretería de demostración y dos proveedores inventados, en pesos argentinos. No corresponden a ningún comercio ni proveedor real; sirven para probar ListaYa de punta a punta hasta tener listas reales anonimizadas.
 
-| File | What it is | What it exercises |
+| Archivo | Qué es | Qué ejercita |
 |---|---|---|
-| `hardware-store/catalog.csv` | The merchant's catalog: 25 products with current cost and selling price, excluding VAT | Catalog in CSV |
-| `hardware-store/southern_fasteners.csv` | A supplier list as a spreadsheet, prices excluding VAT | Code-only route (no model): header below a title, section rows, price increases, margin alerts, an ambiguous line ("SELF-DRILLING SCREW" with no size) and a new product (12 mm anchor) |
-| `hardware-store/northside_distributors.txt` | A supplier list pasted as text, prices including 21% VAT | Text-model route: messy formatting, VAT to remove, a thousands separator (`$ 1,089.00`), a "call for price" line and a new product (bench grinder) |
+| `ferreteria/catalogo.csv` | Catálogo del comerciante: 25 productos con costo y precio vigente, sin IVA | Catálogo en CSV |
+| `ferreteria/lista_bulonera_sur.csv` | Lista de un proveedor en planilla, separada por `;`, precios sin IVA | Ruta de código (sin modelo): encabezado debajo de un título, filas de sección, subas, alertas de margen, una línea ambigua ("TORNILLO AUTOPERFORANTE" sin medida) y un producto nuevo (tarugo de 12 mm) |
+| `ferreteria/lista_distribuidora_norte.txt` | Lista pegada como texto, precios con IVA incluido | Ruta del modelo de texto: formato desprolijo, IVA a descontar, separador de miles (`$ 189.000`), un precio "consultar" y un producto nuevo (amoladora de banco) |
 
-These lists use US dollars and a dot as decimal separator, so tell the extraction command so:
+Para probar la extracción con estas listas:
 
 ```bash
-python -m listaya.extraction_check samples/hardware-store/southern_fasteners.csv --currency USD --decimal-separator .
-python -m listaya.extraction_check samples/hardware-store/northside_distributors.txt --currency USD --decimal-separator .
+python -m listaya.extraction_check samples/ferreteria/lista_bulonera_sur.csv
+python -m listaya.extraction_check samples/ferreteria/lista_distribuidora_norte.txt
 ```
 
-Without those options the command assumes Argentine lists (pesos, decimal comma). The bot does not read a currency or number format setting yet; that arrives when list processing is wired into the bot.
+Aprobar una lista en el bot reescribe el archivo del catálogo: usá una copia si querés conservar el original.

@@ -46,7 +46,7 @@ python -m venv .venv
 
 ## Datos de ejemplo
 
-La carpeta `samples/` tiene datos ficticios en inglés y dólares: el catálogo de una ferretería y dos listas de proveedor (planilla y texto pegado). Ver `samples/README.md`.
+La carpeta `samples/` tiene datos ficticios de una ferretería argentina, en pesos: el catálogo y dos listas de proveedor (planilla y texto pegado). Ver `samples/README.md`.
 
 ## Licencia
 
