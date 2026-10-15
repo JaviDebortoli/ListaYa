@@ -13,6 +13,7 @@ import random as _random
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any, Awaitable, Callable, Iterable
 
 import httpx
@@ -317,3 +318,38 @@ class TokenFactoryClient:
         if status == 400 and "not supported" in lowered:
             return ModelNotAvailableError(status, message, attempts)
         return TokenFactoryError(status, message, attempts)
+
+
+# Published prices in USD per million tokens (input, output) for the shared endpoints.
+MODEL_PRICES_USD_PER_MILLION: dict[str, tuple[Decimal, Decimal]] = {
+    "DeepSeek-V4-Flash": (Decimal("0.14"), Decimal("0.28")),
+    "DeepSeek-V4.1-Flash": (Decimal("0.14"), Decimal("0.28")),
+    "DeepSeek-V4-Flash-Vision-Exp": (Decimal("0.14"), Decimal("0.28")),
+    "MiMo-V2.6-Flash": (Decimal("0.14"), Decimal("0.28")),
+    "GLM-5.3-Flash": (Decimal("0.15"), Decimal("0.50")),
+    "Qwen3.8-Flash-Next": (Decimal("0.15"), Decimal("0.47")),
+    "Qwen3.8-27B": (Decimal("0.50"), Decimal("3.00")),
+    "MiniCPM5-2B": (Decimal("0.124"), Decimal("0.7425")),
+}
+
+# Models that reason by default; reasoning tokens count against max_tokens and can leave
+# the reply empty, so extraction asks them not to (or as little as each one allows).
+_REASONING_EFFORT = {
+    "MiMo-V2.6-Flash": "none",
+    "Qwen3.8-Flash-Next": "none",
+    "Qwen3.8-27B": "low",
+    "GLM-5.3-Flash": "low",
+}
+
+
+def cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> Decimal | None:
+    """Cost of one call at the published prices, or None for a model without a known price."""
+    prices = MODEL_PRICES_USD_PER_MILLION.get(model)
+    if prices is None:
+        return None
+    input_price, output_price = prices
+    return (input_price * prompt_tokens + output_price * completion_tokens) / Decimal(1_000_000)
+
+
+def reasoning_effort_for(model: str) -> str | None:
+    return _REASONING_EFFORT.get(model)

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, Sequence
 
 from listaya.extraction.rows import ExtractedRow, ListFormat, list_vat_statement, validate_rows
-from listaya.token_factory import TokenFactoryError
+from listaya.token_factory import TokenFactoryError, reasoning_effort_for
 
 SYSTEM_PROMPT = """You extract product rows from a supplier price list for a store.
 Reply with a JSON object: {"rows": [ ... ]}, one entry per product line, in the order they appear.
@@ -161,7 +161,8 @@ class ModelExtractor:
                 [{"role": "system", "content": self._system_prompt}, {"role": "user", "content": user_content}],
                 max_tokens=self._max_tokens,
                 response_format={"type": "json_object"},
-                reasoning_effort=self._reasoning_effort,
+                # Models that think by default would spend max_tokens on reasoning: turn it down.
+                reasoning_effort=self._reasoning_effort or reasoning_effort_for(model),
                 temperature=0,
             )
         except TokenFactoryError as error:

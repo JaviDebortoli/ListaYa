@@ -1,0 +1,58 @@
+{
+  "lista_bulonera_sur.csv": [
+    {"description": "TORNILLO AUTOPERFORANTE 6X1", "unit_cost": "5180.00", "includes_vat": false},
+    {"description": "TORNILLO AUTOPERFORANTE 6X2", "unit_cost": "5950.00", "includes_vat": false},
+    {"description": "TORNILLO P/MADERA 8X1,5", "unit_cost": "4250.00", "includes_vat": false},
+    {"description": "TORNILLO DRYWALL 6X1 PUNTA AGUJA", "unit_cost": "3410.00", "includes_vat": false},
+    {"description": "TORNILLO AUTOPERFORANTE", "unit_cost": "5000.00", "includes_vat": false},
+    {"description": "TARUGO NYLON 6MM", "unit_cost": "1590.00", "includes_vat": false},
+    {"description": "TARUGO NYLON 8MM", "unit_cost": "2770.00", "includes_vat": false},
+    {"description": "TARUGO NYLON 10MM", "unit_cost": "2415.00", "includes_vat": false},
+    {"description": "TARUGO NYLON 12MM CON TOPE", "unit_cost": "3120.00", "includes_vat": false},
+    {"description": "CLAVO PUNTA PARIS 2\" (X KG)", "unit_cost": "3960.00", "includes_vat": false},
+    {"description": "CLAVO PUNTA PARIS 2 1/2\" (X KG)", "unit_cost": "3850.00", "includes_vat": false}
+  ],
+  "lista_distribuidora_norte.txt": [
+    {"description": "Martillo carpintero 27mm", "unit_cost": "14520", "includes_vat": true},
+    {"description": "Destornillador plano 6mm", "unit_cost": "3388", "includes_vat": true},
+    {"description": "Pinza universal 8\"", "unit_cost": "12705", "includes_vat": true},
+    {"description": "Cinta métrica 5mts", "unit_cost": "5687.50", "includes_vat": true},
+    {"description": "Cinta aisladora 20mts x unidad", "unit_cost": "1270.50", "includes_vat": true},
+    {"description": "Cable unipolar 2,5mm x 100mts", "unit_cost": "84700", "includes_vat": true},
+    {"description": "Silicona transp. 280ml", "unit_cost": "5082", "includes_vat": true},
+    {"description": "Pegamento de contacto 250ml", "unit_cost": "5808", "includes_vat": true},
+    {"description": "Lija al agua 120", "unit_cost": "665.50", "includes_vat": true},
+    {"description": "Lija al agua 220", "unit_cost": "665.50", "includes_vat": true},
+    {"description": "Teflón 3/4 x 10mts", "unit_cost": "605", "includes_vat": true},
+    {"description": "Amoladora de banco 8\" 1/2HP", "unit_cost": "189000", "includes_vat": true},
+    {"description": "Pintura látex int. blanco 4lts", "unit_cost": null, "includes_vat": true}
+  ],
+  "lista_pintureria_oeste.pdf": [
+    {"description": "Látex interior blanco 4 L", "unit_cost": "22990.00", "includes_vat": false},
+    {"description": "Rodillo lana 22 cm", "unit_cost": "5610.00", "includes_vat": false},
+    {"description": "Pincel cerda N° 2", "unit_cost": "2050.00", "includes_vat": false},
+    {"description": "Canilla esférica 1/2\"", "unit_cost": "7480.00", "includes_vat": false},
+    {"description": "Teflón 3/4\" x 10 m", "unit_cost": "520.00", "includes_vat": false},
+    {"description": "Silicona transparente 280 ml", "unit_cost": "4150.00", "includes_vat": false},
+    {"description": "Pegamento de contacto 250 ml", "unit_cost": "4990.00", "includes_vat": false},
+    {"description": "Esmalte sintético negro 1 L", "unit_cost": "9800.00", "includes_vat": false}
+  ],
+  "foto_corralon_san_martin.jpg": [
+    {"description": "Clavo punta paris 2\" (x kg)", "unit_cost": "4828", "includes_vat": true},
+    {"description": "Clavo punta paris 2 1/2\" (x kg)", "unit_cost": "4683", "includes_vat": true},
+    {"description": "Martillo carpintero 27 mm", "unit_cost": "13189", "includes_vat": true},
+    {"description": "Cinta métrica 5 m", "unit_cost": "5748", "includes_vat": true},
+    {"description": "Toma corriente doble", "unit_cost": "3194", "includes_vat": true},
+    {"description": "Destornillador plano 6 mm", "unit_cost": "3497", "includes_vat": true},
+    {"description": "Llave ajustable 8\"", "unit_cost": "15730", "includes_vat": true}
+  ],
+  "escaneo_corralon_san_martin.pdf": [
+    {"description": "Clavo punta paris 2\" (x kg)", "unit_cost": "4828", "includes_vat": true},
+    {"description": "Clavo punta paris 2 1/2\" (x kg)", "unit_cost": "4683", "includes_vat": true},
+    {"description": "Martillo carpintero 27 mm", "unit_cost": "13189", "includes_vat": true},
+    {"description": "Cinta métrica 5 m", "unit_cost": "5748", "includes_vat": true},
+    {"description": "Toma corriente doble", "unit_cost": "3194", "includes_vat": true},
+    {"description": "Destornillador plano 6 mm", "unit_cost": "3497", "includes_vat": true},
+    {"description": "Llave ajustable 8\"", "unit_cost": "15730", "includes_vat": true}
+  ]
+}

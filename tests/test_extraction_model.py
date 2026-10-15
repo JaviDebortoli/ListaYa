@@ -195,3 +195,11 @@ class TestListVatWiring:
         for extracted in result.rows:
             want = expected if expected is not None else model_answers[extracted.source_row]
             assert extracted.includes_vat is want
+
+
+def test_models_that_think_by_default_get_their_reasoning_turned_down():
+    client = FakeChatClient({"rows": []}, {"rows": []})
+    extractor = ModelExtractor(client, text_model="DeepSeek-V4-Flash", vision_model="MiMo-V2.6-Flash")
+    run(extractor.extract_text("a $1"))
+    run(extractor.extract_images([(b"x", "image/png")]))
+    assert [call["reasoning_effort"] for call in client.calls] == [None, "none"]
