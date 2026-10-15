@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import io
 from pathlib import PurePath
@@ -108,13 +109,9 @@ class ListExtractor:
         return _with_problems(await self._model.extract_text(table_as_text(table)), notes)
 
     async def _pdf(self, content: bytes) -> ExtractionResult:
-        import pdfplumber
-
         try:
-            with pdfplumber.open(io.BytesIO(content)) as pdf:
-                total_pages = len(pdf.pages)
-                pages = pdf.pages[:MAX_PDF_PAGES]
-                texts = [page.extract_text() or "" for page in pages]
+            # PDF parsing and rendering are CPU-bound: keep them off the event loop.
+            total_pages, texts = await asyncio.to_thread(_read_pdf_texts, content)
         except Exception as error:  # pdfminer raises several unrelated types for broken files
             return ExtractionResult([], [f"the PDF could not be read: {error}"])
 
@@ -134,7 +131,7 @@ class ListExtractor:
             problems.extend(text_result.problems)
         if sparse:
             try:
-                images = _render_pages(content, sparse)
+                images = await asyncio.to_thread(_render_pages, content, sparse)
             except Exception as error:
                 return ExtractionResult(rows, problems + [f"the PDF pages could not be rendered: {error}"])
             image_result = await self._model.extract_images(images)
@@ -143,6 +140,13 @@ class ListExtractor:
             rows.extend(dataclasses.replace(row, source_row=offset + row.source_row) for row in image_result.rows)
             problems.extend(image_result.problems)
         return ExtractionResult(rows, problems)
+
+
+def _read_pdf_texts(content: bytes) -> tuple[int, list[str]]:
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        return len(pdf.pages), [page.extract_text() or "" for page in pdf.pages[:MAX_PDF_PAGES]]
 
 
 def _render_pages(content: bytes, page_indexes: Sequence[int]) -> list[tuple[bytes, str]]:

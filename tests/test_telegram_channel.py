@@ -160,3 +160,7 @@ class TestDispatch:
 
         run(dispatch_update(message_update(sticker=None), handler))
         assert received == []
+
+
+def test_download_limit_is_twenty_mebibytes():
+    assert MAX_DOWNLOAD_BYTES == 20 * 1024 * 1024

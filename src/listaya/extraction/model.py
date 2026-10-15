@@ -60,6 +60,21 @@ def _parse_rows(content: str) -> list[Any] | None:
     return rows if isinstance(rows, list) else None
 
 
+def _unique_source_rows(rows: list[ExtractedRow], last_line: int) -> list[ExtractedRow]:
+    """Give repeated source rows new numbers after the last line, marked as unknown."""
+    seen: set[int] = set()
+    next_free = last_line + 1
+    unique = []
+    for row in rows:
+        if row.source_row in seen:
+            issues = row.issues if "unknown_source_row" in row.issues else row.issues + ("unknown_source_row",)
+            row = dataclasses.replace(row, source_row=next_free, issues=issues)
+            next_free += 1
+        seen.add(row.source_row)
+        unique.append(row)
+    return unique
+
+
 class ModelExtractor:
     def __init__(
         self,
@@ -92,7 +107,7 @@ class ModelExtractor:
             rows.extend(batch_rows)
             if problem:
                 problems.append(problem)
-        return ExtractionResult(rows, problems)
+        return ExtractionResult(_unique_source_rows(rows, len(lines)), problems)
 
     async def extract_images(self, images: Sequence[tuple[bytes, str]]) -> ExtractionResult:
         """images: (content, mime type) per page or photo, in reading order."""

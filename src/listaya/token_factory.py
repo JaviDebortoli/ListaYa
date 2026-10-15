@@ -20,8 +20,9 @@ import httpx
 DEFAULT_BASE_URL = "https://developer.amd.com.cn/radeon/api/v1"
 RETRYABLE_STATUSES = frozenset({429, 502, 503})
 # Failures before the request reached the model: safe to retry like a 502/503.
-# Read/write timeouts are not here: the request may already be processed and billed.
-RETRYABLE_TRANSPORT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError)
+# Read timeouts and dropped responses (RemoteProtocolError) are not here: the request
+# may already be processed and billed, so retrying could pay twice.
+RETRYABLE_TRANSPORT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
 
 Sleep = Callable[[float], Awaitable[None]]
 

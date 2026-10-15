@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Protocol, Sequence, runtime_checkable
 
 # Bot API limit for downloading files (https://core.telegram.org/bots/api#getfile).
-MAX_DOWNLOAD_BYTES = 20_000_000
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
 
 class FileTooLargeError(Exception):

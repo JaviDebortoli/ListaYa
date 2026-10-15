@@ -137,3 +137,13 @@ class TestReplyShape:
         assert [r.source_row for r in result.rows] == [1, 2, 3, 4]
         assert "unknown_source_row" in result.rows[2].issues
         assert "unknown_source_row" not in result.rows[3].issues
+
+    def test_several_out_of_batch_rows_still_get_unique_source_rows(self):
+        client = FakeChatClient({"rows": [row(1), row(2)]}, {"rows": [row(3), row(1), row(2), row(9)]})
+        extractor = ModelExtractor(client, text_model="T", vision_model="V", batch_lines=2)
+
+        result = run(extractor.extract_text("a $1\nb $2\nc $3\nd $4"))
+
+        numbers = [r.source_row for r in result.rows]
+        assert len(numbers) == len(set(numbers))
+        assert sum("unknown_source_row" in r.issues for r in result.rows) == 3

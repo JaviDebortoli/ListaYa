@@ -262,7 +262,7 @@ class TestModelsAndUsage:
 
 
 class TestNetworkAndMalformedResponses:
-    @pytest.mark.parametrize("error", [httpx.ConnectError("refused"), httpx.ConnectTimeout("slow"), httpx.RemoteProtocolError("dropped")])
+    @pytest.mark.parametrize("error", [httpx.ConnectError("refused"), httpx.ConnectTimeout("slow")])
     def test_retries_connection_failures(self, error):
         outcomes: list = [error, httpx.Response(200, json=ok_body())]
 
@@ -286,6 +286,20 @@ class TestNetworkAndMalformedResponses:
         with pytest.raises(RetriesExhaustedError, match="refused"):
             run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
         assert [(r.status, r.attempts) for r in records] == [("network", 2)]
+
+    @pytest.mark.parametrize("error", [httpx.ReadTimeout("no answer"), httpx.RemoteProtocolError("dropped mid-response")])
+    def test_failures_after_sending_are_not_retried(self, error):
+        # The request may already have been processed and billed: fail instead of paying twice.
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            raise error
+
+        client, _ = make_client(handler)
+        with pytest.raises(TokenFactoryError, match="network error"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert len(calls) == 1
 
     def test_read_timeout_is_not_retried(self):
         # The request may already have been processed and billed: fail instead of paying twice.
