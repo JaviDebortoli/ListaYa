@@ -21,6 +21,7 @@ def test_sample_spreadsheet_list_is_read_without_the_model():
     assert notes == []
     assert len(rows) == 11
     assert all(row.issues == () for row in rows)
+    # The price header ("Precio s/IVA") states VAT but no currency symbol, so currency stays unknown.
     assert all(row.currency is None and row.includes_vat is False for row in rows)
     first = rows[0]
     assert (first.supplier_code, first.description, first.unit_cost) == (

@@ -6,7 +6,7 @@ Datos **ficticios** de una ferretería de demostración y dos proveedores invent
 |---|---|---|
 | `ferreteria/catalogo.csv` | Catálogo del comerciante: 25 productos con costo y precio vigente, sin IVA | Catálogo en CSV |
 | `ferreteria/lista_bulonera_sur.csv` | Lista de un proveedor en planilla, separada por `;`, precios sin IVA | Ruta de código (sin modelo): encabezado debajo de un título, filas de sección, subas, alertas de margen, una línea ambigua ("TORNILLO AUTOPERFORANTE" sin medida) y un producto nuevo (tarugo de 12 mm) |
-| `ferreteria/lista_distribuidora_norte.txt` | Lista pegada como texto, precios con IVA incluido | Ruta del modelo de texto: formato desprolijo, IVA a descontar, separador de miles (`$ 189.000`), un precio "consultar" y un producto nuevo (amoladora de banco) |
+| `ferreteria/lista_distribuidora_norte.txt` | Lista pegada como texto, precios con IVA del 21% incluido | Ruta del modelo de texto: formato desprolijo, IVA a descontar, separador de miles (`$ 189.000`), un precio "consultar" y un producto nuevo (amoladora de banco) |
 
 Para probar la extracción con estas listas:
 

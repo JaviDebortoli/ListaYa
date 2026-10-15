@@ -383,3 +383,21 @@ class TestOddSuccessShapes:
         with pytest.raises(TokenFactoryError, match="malformed"):
             run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
         assert [r.status for r in records] == ["malformed"]
+
+
+class TestStaleConnections:
+    def test_server_closing_an_idle_connection_before_answering_is_retried(self):
+        # httpx reports a pooled connection the server already closed this way: nothing was processed.
+        outcomes: list = [
+            httpx.RemoteProtocolError("Server disconnected without sending a response."),
+            httpx.Response(200, json=ok_body()),
+        ]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        client, _ = make_client(handler)
+        assert run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10)).attempts == 2
