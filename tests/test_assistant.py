@@ -318,3 +318,13 @@ class TestRobustness:
         monkeypatch.undo()
         send(env, text="ok")  # the run is still waiting for approval
         assert last(env).text == "Listo, actualicé 2 precios en tu catálogo."
+
+
+class TestRowsWithoutPrice:
+    def test_doubtful_row_without_price_is_not_asked(self, env):
+        no_price = ExtractedRow("BS-T000", "TORNILLO AUTOPERFORANTE", D("100"), None, None, None, False, 3, 1.0, "consultar")
+        env.extractor.result = ExtractionResult(CLEAR_ROWS + [no_price])
+        send(env, **file_message())
+        assert not any(m.buttons and m.buttons[0].label == "Sí" for m in env.channel.sent)
+        assert "ℹ 1 sin precio para calcular" in last(env).text
+        assert "no pude emparejar" not in last(env).text

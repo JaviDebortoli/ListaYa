@@ -134,3 +134,11 @@ class TestSummary:
         assert "Tornillo autoperforante 6x1: hoy lo vendés a $6.000 y con el costo nuevo ($5.180) el margen queda en 14% (tu mínimo es 20%). Precio sugerido: $7.400." in text
         assert "Sin emparejar:\n- AMOLADORA DE BANCO" in text
         assert "Sin precio para calcular:\n- MARTILLO (consultar)" in text
+
+
+def test_unmatched_row_without_price_counts_as_unpriced():
+    no_price = unmatched(row("PINTURA LATEX 4L", None, 9, raw="consultar"))
+    summary = summarize("Norte", price_items([no_price], PRODUCTS, RULE, CONFIG, supplier_includes_vat=None, default_currency="ARS"), problems=[])
+    assert summary.unmatched == []
+    assert len(summary.unpriced) == 1
+    assert "Sin precio para calcular:\n- PINTURA LATEX 4L (consultar)" in alerts_text(summary)

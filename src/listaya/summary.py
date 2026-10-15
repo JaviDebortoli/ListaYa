@@ -99,8 +99,9 @@ def summarize(supplier: str, items: Sequence[RunItem], problems: Sequence[str]) 
         total=len(items),
         increased=increased,
         alerts=[item for item in priced if item.quote.current_price_below_min_margin],
-        unmatched=[item for item in items if item.product is None],
-        unpriced=[item for item in items if item.product is not None and not item.priced],
+        # A row without a price cannot be priced whether or not it was matched: report it as unpriced.
+        unmatched=[item for item in items if item.product is None and item.row.unit_cost is not None],
+        unpriced=[item for item in items if not item.priced and (item.product is not None or item.row.unit_cost is None)],
         updatable=priced,
         problems=list(problems),
     )

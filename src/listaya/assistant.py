@@ -241,7 +241,12 @@ class Assistant:
                 created_at=self._clock(),
                 results=results,
                 problems=result.problems,
-                questions=[i for i, r in enumerate(results) if r.status == MatchStatus.NEEDS_CONFIRMATION],
+                # Rows without a price cannot be priced anyway: do not spend a question on them.
+                questions=[
+                    i
+                    for i, r in enumerate(results)
+                    if r.status == MatchStatus.NEEDS_CONFIRMATION and r.row.unit_cost is not None
+                ],
             )
             self._matchers[run_id] = matcher
             async with session.lock:
