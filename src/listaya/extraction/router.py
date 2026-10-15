@@ -17,7 +17,7 @@ from pathlib import PurePath
 from typing import Any, Protocol, Sequence
 
 from listaya.extraction.model import ExtractionResult
-from listaya.extraction.rows import ExtractedRow
+from listaya.extraction.rows import ExtractedRow, ListFormat
 from listaya.extraction.spreadsheet import SpreadsheetError, read_table, rows_from_table, table_as_text
 
 MAX_PDF_PAGES = 20
@@ -75,8 +75,9 @@ def _with_problems(result: ExtractionResult, notes: list[str]) -> ExtractionResu
 
 
 class ListExtractor:
-    def __init__(self, model: ModelExtractorPort) -> None:
+    def __init__(self, model: ModelExtractorPort, list_format: ListFormat | None = None) -> None:
         self._model = model
+        self._format = list_format or ListFormat()
 
     async def extract_pasted_text(self, text: str) -> ExtractionResult:
         return await self._model.extract_text(text)
@@ -102,11 +103,11 @@ class ListExtractor:
             table, notes = read_table(content, kind)
         except SpreadsheetError as error:
             return ExtractionResult([], [str(error)])
-        rows = rows_from_table(table)
+        rows = rows_from_table(table, self._format)
         if rows is not None:
             return ExtractionResult(rows, notes)
         # No recognizable header: let the model map the columns (PRD 8.1).
-        return _with_problems(await self._model.extract_text(table_as_text(table)), notes)
+        return _with_problems(await self._model.extract_text(table_as_text(table, self._format)), notes)
 
     async def _pdf(self, content: bytes) -> ExtractionResult:
         try:

@@ -17,8 +17,6 @@ from dataclasses import dataclass, field
 from decimal import ROUND_CEILING, ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal, localcontext
 from typing import Callable, Mapping, ParamSpec, TypeVar
 
-PRICED_CURRENCY = "ARS"
-
 # Flags that leave a product unpriced; the rest are informational.
 BLOCKING_FLAGS = frozenset({"invalid_new_cost", "unknown_vat", "unknown_currency", "foreign_currency"})
 
@@ -61,6 +59,7 @@ class PricingConfig:
     rounding_step: Decimal = Decimal("10")
     vat_rate: Decimal = Decimal("0.21")
     prices_include_vat: bool = False
+    currency: str = "ARS"  # the merchant's currency; costs in any other currency are not priced
 
     def __post_init__(self) -> None:
         if self.rounding_step <= 0:
@@ -192,7 +191,7 @@ def quote(
     normalized_currency = (currency or "").strip().upper()
     if not normalized_currency:
         flags.add("unknown_currency")
-    elif normalized_currency != PRICED_CURRENCY:
+    elif normalized_currency != config.currency.strip().upper():
         flags.add("foreign_currency")
 
     if flags & BLOCKING_FLAGS:

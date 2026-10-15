@@ -16,17 +16,29 @@ import zipfile
 from decimal import Decimal
 from typing import Any
 
-from listaya.extraction.rows import ExtractedRow, validate_rows
+from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows
 
 HEADER_SEARCH_ROWS = 20
 
-# Checked in this order, so "Cód. Artículo" is a code and "Precio x unidad" is a price.
+# Spanish and English keywords, checked in this order, so "Cód. Artículo" / "Item code" is a
+# code and "Precio x unidad" / "Unit price" is a price.
 _FIELD_KEYWORDS: list[tuple[str, frozenset[str]]] = [
-    ("supplier_code", frozenset({"codigo", "cod", "sku", "ref", "referencia"})),
-    ("unit_cost_text", frozenset({"precio", "costo", "importe", "valor", "lista", "neto", "pvp"})),
-    ("description", frozenset({"descripcion", "producto", "articulo", "detalle", "nombre", "item", "desc"})),
-    ("pack_size", frozenset({"presentacion", "pack", "bulto", "envase", "contenido", "cantidad"})),
-    ("unit", frozenset({"unidad", "um", "medida"})),
+    ("supplier_code", frozenset({"codigo", "cod", "sku", "ref", "referencia", "code"})),
+    (
+        "unit_cost_text",
+        frozenset({"precio", "costo", "importe", "valor", "lista", "neto", "pvp", "price", "cost", "net"}),
+    ),
+    (
+        "description",
+        frozenset(
+            {"descripcion", "producto", "articulo", "detalle", "nombre", "item", "desc", "description", "product", "name"}
+        ),
+    ),
+    (
+        "pack_size",
+        frozenset({"presentacion", "pack", "bulto", "envase", "contenido", "cantidad", "qty", "quantity", "case"}),
+    ),
+    ("unit", frozenset({"unidad", "um", "medida", "unit", "uom"})),
 ]
 
 
@@ -119,24 +131,27 @@ def _header_fields(row: list[Any]) -> dict[str, int]:
 
 def _vat_from_header(header: str) -> bool | None:
     text = _normalize(header)
-    if re.search(r"(c/|con)\s*iva|iva\s*incl", text):
+    if re.search(r"(c/|con)\s*iva|iva\s*incl|incl\.?\s*(vat|tax)|(vat|tax)\s*incl", text):
         return True
-    if re.search(r"(s/|sin|\+|mas)\s*iva", text):
+    if re.search(r"(s/|sin|\+|mas)\s*iva|(\bex|excl?)\.?\s*(vat|tax)|(\+|plus)\s*(vat|tax)|\bnet\b", text):
         return False
     return None
 
 
-def _currency_from_header(header: str) -> str | None:
+def _currency_from_header(header: str, local_currency: str) -> str | None:
     text = _normalize(header)
     if re.search(r"u\$s|us\$|usd|dolar", text):
         return "USD"
-    if "$" in text or re.search(r"\bars\b|pesos", text):
+    if re.search(r"\bars\b|pesos", text):
         return "ARS"
+    if "$" in text:
+        return local_currency  # a bare "$" is the merchant's own currency
     return None
 
 
-def rows_from_table(table: list[list[Any]]) -> list[ExtractedRow] | None:
+def rows_from_table(table: list[list[Any]], list_format: ListFormat | None = None) -> list[ExtractedRow] | None:
     """Extract rows using a recognized header, or None when no header is found."""
+    fmt = list_format or ListFormat()
     for header_index, header in enumerate(table[:HEADER_SEARCH_ROWS]):
         fields = _header_fields(header)
         if "description" in fields and "unit_cost_text" in fields:
@@ -146,7 +161,7 @@ def rows_from_table(table: list[list[Any]]) -> list[ExtractedRow] | None:
 
     price_header = str(header[fields["unit_cost_text"]])
     includes_vat = _vat_from_header(price_header)
-    currency = _currency_from_header(price_header)
+    currency = _currency_from_header(price_header, fmt.local_currency)
 
     raw_rows: list[dict[str, Any]] = []
     for row_index in range(header_index + 1, len(table)):
@@ -160,16 +175,17 @@ def rows_from_table(table: list[list[Any]]) -> list[ExtractedRow] | None:
             source_row=row_index + 1, includes_vat=includes_vat, currency=currency, confidence=1.0
         )
         raw_rows.append(item)
-    return validate_rows(raw_rows)
+    return validate_rows(raw_rows, fmt)
 
 
-def table_as_text(table: list[list[Any]]) -> str:
+def table_as_text(table: list[list[Any]], list_format: ListFormat | None = None) -> str:
     """Render a table as text lines ('cell | cell') for the model when no header was recognized."""
-    return "\n".join(" | ".join(_cell_text(value) for value in row if value is not None) for row in table)
+    separator = (list_format or ListFormat()).decimal_separator
+    return "\n".join(" | ".join(_cell_text(value, separator) for value in row if value is not None) for row in table)
 
 
-def _cell_text(value: Any) -> str:
-    # Write real numbers with a decimal comma, the convention the amount parser expects.
+def _cell_text(value: Any, decimal_separator: str) -> str:
+    # Write real numbers with the list's decimal separator, the convention the amount parser expects.
     if isinstance(value, float):
-        return format(Decimal(str(value)), "f").replace(".", ",")
+        return format(Decimal(str(value)), "f").replace(".", decimal_separator)
     return str(value)

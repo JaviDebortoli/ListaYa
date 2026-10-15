@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from listaya.extraction.rows import ExtractedRow, parse_amount, validate_rows
+from listaya.extraction.rows import ExtractedRow, ListFormat, parse_amount, validate_rows
 
 D = Decimal
 
@@ -125,3 +125,30 @@ class TestValidateRows:
         # A spreadsheet number 1.234 is one peso and change, not "1.234" written with a thousands dot.
         [row] = validate_rows([raw(unit_cost_text=value)])
         assert row.unit_cost == D(expected)
+
+
+US = ListFormat(decimal_separator=".", local_currency="USD")
+
+
+class TestUsFormat:
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("$1,250.00", "1250.00"),
+            ("1,250", "1250"),
+            ("5.18", "5.18"),
+            ("12,345,678", "12345678"),
+            ("US$ 790.5", "790.5"),
+            ("1.234,56", "1234.56"),
+        ],
+    )
+    def test_dot_decimal_lists(self, text, expected):
+        assert parse_amount(text, decimal_separator=".") == D(expected)
+
+    def test_validate_rows_uses_the_list_format(self):
+        [row] = validate_rows([raw(unit_cost_text="$1,250.00", currency=None)], US)
+        assert row.unit_cost == D("1250.00")
+
+    def test_rejects_unknown_decimal_separator(self):
+        with pytest.raises(ValueError):
+            ListFormat(decimal_separator=";", local_currency="USD")

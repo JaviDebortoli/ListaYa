@@ -255,3 +255,16 @@ class TestQuote:
         assert result.variation is None
         assert result.cost_change is None
         assert {"invalid_current_price", "invalid_previous_cost"} <= result.flags
+
+
+class TestMerchantCurrency:
+    def test_usd_merchant_prices_usd_costs(self):
+        config = PricingConfig(currency="USD", rounding_step=D("0.05"))
+        result = run(new_cost=D("4.20"), current_price=D("6.00"), current_cost=D("4.00"), currency="usd", config=config)
+        assert result.priced
+        assert result.suggested_price == D("6.00")  # 4.20 / 0.7 = 6.00
+
+    def test_usd_merchant_flags_peso_costs_as_foreign(self):
+        result = run(currency="ARS", config=PricingConfig(currency="USD"))
+        assert not result.priced
+        assert "foreign_currency" in result.flags

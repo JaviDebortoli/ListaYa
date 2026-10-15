@@ -147,3 +147,16 @@ class TestReplyShape:
         numbers = [r.source_row for r in result.rows]
         assert len(numbers) == len(set(numbers))
         assert sum("unknown_source_row" in r.issues for r in result.rows) == 3
+
+
+def test_prompt_tells_the_model_what_a_bare_dollar_sign_means():
+    from listaya.extraction.rows import ListFormat
+
+    client = FakeChatClient({"rows": [row(1, cost="$1,250.00")]})
+    extractor = ModelExtractor(
+        client, text_model="T", vision_model="V", list_format=ListFormat(decimal_separator=".", local_currency="USD")
+    )
+    result = run(extractor.extract_text("Hammer $1,250.00"))
+    system = client.calls[0]["messages"][0]["content"]
+    assert '"$" alone means USD' in system
+    assert result.rows[0].unit_cost == Decimal("1250.00")

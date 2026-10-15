@@ -4,6 +4,7 @@ from decimal import Decimal
 import openpyxl
 import pytest
 
+from listaya.extraction.rows import ListFormat
 from listaya.extraction.spreadsheet import SpreadsheetError, read_table, rows_from_table, table_as_text
 
 D = Decimal
@@ -94,3 +95,30 @@ class TestRowsFromTable:
 def test_table_as_text_joins_non_empty_cells():
     # Real numbers use a decimal comma so the Argentine parser reads 1.234 as one peso, not 1234.
     assert table_as_text([["a", None, 1.5], [], [None, "b", 1.234, 1234]]) == "a | 1,5\n\nb | 1,234 | 1234"
+
+
+class TestEnglishLists:
+    US = ListFormat(decimal_separator=".", local_currency="USD")
+
+    def test_english_header_and_dollar_sign_mean_the_merchant_currency(self):
+        table = [
+            ["SOUTHERN FASTENERS - PRICE LIST"],
+            ["Item code", "Description", "Pack", "Unit price $ (excl. VAT)"],
+            ["SF-6100", "Self-drilling screw 6x1", "100", "$1,250.00"],
+        ]
+        [row] = rows_from_table(table, self.US)
+        assert (row.supplier_code, row.description, row.pack_size) == ("SF-6100", "Self-drilling screw 6x1", D("100"))
+        assert row.unit_cost == D("1250.00")
+        assert row.currency == "USD"
+        assert row.includes_vat is False
+
+    @pytest.mark.parametrize(
+        "header, includes_vat",
+        [("Price incl. VAT", True), ("Price VAT included", True), ("Price ex VAT", False), ("Net price", False)],
+    )
+    def test_english_vat_wording(self, header, includes_vat):
+        [row] = rows_from_table([["Product", header], ["Hammer", "10.50"]], self.US)
+        assert row.includes_vat is includes_vat
+
+    def test_table_as_text_uses_the_list_decimal_separator(self):
+        assert table_as_text([["Hammer", 10.5]], self.US) == "Hammer | 10.5"

@@ -41,45 +41,62 @@ def _grouped(integer_part: str, separator: str) -> bool:
     return re.fullmatch(rf"\d{{1,3}}(?:{re.escape(separator)}\d{{3}})+", integer_part) is not None
 
 
-def parse_amount(text: str) -> Decimal | None:
-    """Parse a price as written in an Argentine list: '$ 1.234,56' -> 1234.56. None if unreadable.
+@dataclass(frozen=True)
+class ListFormat:
+    """How the merchant's suppliers write prices: Argentina uses '1.234,56' and '$' for pesos;
+    a US-style list uses '1,234.56' and '$' for dollars."""
 
-    Comma is the decimal separator and dot the thousands separator; when both
-    appear, the last one is the decimal separator (so '1,234.56' also works).
-    A lone dot followed by exactly three digits ('1.234') is a thousands separator.
+    decimal_separator: str = ","
+    local_currency: str = "ARS"  # what a bare "$" means
+
+    def __post_init__(self) -> None:
+        if self.decimal_separator not in {",", "."}:
+            raise ValueError("decimal_separator must be ',' or '.'")
+        if self.local_currency not in CURRENCIES:
+            raise ValueError(f"local_currency must be one of {sorted(CURRENCIES)}")
+
+
+def parse_amount(text: str, decimal_separator: str = ",") -> Decimal | None:
+    """Parse a price as written in a supplier list: '$ 1.234,56' -> 1234.56. None if unreadable.
+
+    With decimal_separator ',' (Argentina) the dot groups thousands; with '.' the comma
+    does. When both appear, the last one is the decimal separator either way. A lone
+    thousands separator followed by exactly three digits ('1.234' or '1,250') groups thousands.
     """
-    cleaned = _CURRENCY_TOKENS.sub("", text).replace(" ", "").replace(" ", "")
+    cleaned = _CURRENCY_TOKENS.sub("", text).replace(" ", "").replace("\u00a0", "")
     if not _DIGITS_AND_SEPARATORS.fullmatch(cleaned):
         return None
+    decimal_sep = decimal_separator
+    thousands_sep = "." if decimal_sep == "," else ","
 
-    last_dot, last_comma = cleaned.rfind("."), cleaned.rfind(",")
-    if last_dot >= 0 and last_comma >= 0:
-        decimal_sep = "." if last_dot > last_comma else ","
+    if "." in cleaned and "," in cleaned:
+        decimal_sep = "." if cleaned.rfind(".") > cleaned.rfind(",") else ","
         thousands_sep = "," if decimal_sep == "." else "."
         integer_part, _, fraction = cleaned.rpartition(decimal_sep)
         if decimal_sep in integer_part or not fraction.isdigit() or not _grouped(integer_part, thousands_sep):
             return None
         normalized = integer_part.replace(thousands_sep, "") + "." + fraction
-    elif last_comma >= 0:
-        if cleaned.count(",") == 1:
-            integer_part, _, fraction = cleaned.partition(",")
+    elif decimal_sep in cleaned:
+        if cleaned.count(decimal_sep) == 1:
+            integer_part, _, fraction = cleaned.partition(decimal_sep)
             if not fraction.isdigit():
                 return None
             normalized = integer_part + "." + fraction
-        elif _grouped(cleaned, ","):
-            normalized = cleaned.replace(",", "")
+        elif _grouped(cleaned, decimal_sep):
+            normalized = cleaned.replace(decimal_sep, "")
         else:
             return None
-    elif last_dot >= 0:
-        if cleaned.count(".") > 1 or re.fullmatch(r"[1-9]\d{0,2}\.\d{3}", cleaned):
-            if not _grouped(cleaned, "."):
+    elif thousands_sep in cleaned:
+        lookalike = rf"[1-9]\d{{0,2}}{re.escape(thousands_sep)}\d{{3}}"
+        if cleaned.count(thousands_sep) > 1 or re.fullmatch(lookalike, cleaned):
+            if not _grouped(cleaned, thousands_sep):
                 return None
-            normalized = cleaned.replace(".", "")
+            normalized = cleaned.replace(thousands_sep, "")
         else:
-            integer_part, _, fraction = cleaned.partition(".")
+            integer_part, _, fraction = cleaned.partition(thousands_sep)
             if not fraction.isdigit():
                 return None
-            normalized = cleaned
+            normalized = integer_part + "." + fraction
     else:
         normalized = cleaned
 
@@ -101,7 +118,7 @@ def _finite_decimal(value: int | float | Decimal) -> Decimal | None:
     return number if number.is_finite() else None
 
 
-def _positive_number(value: Any) -> Decimal | None:
+def _positive_number(value: Any, decimal_separator: str) -> Decimal | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float, Decimal)):
@@ -109,7 +126,7 @@ def _positive_number(value: Any) -> Decimal | None:
         if number is None:
             return None
     elif isinstance(value, str):
-        number = parse_amount(value)
+        number = parse_amount(value, decimal_separator)
         if number is None:
             return None
     else:
@@ -124,8 +141,9 @@ def _confidence(value: Any) -> float:
     return value if math.isfinite(value) and 0.0 <= value <= 1.0 else 0.0
 
 
-def validate_rows(items: Iterable[Any]) -> list[ExtractedRow]:
+def validate_rows(items: Iterable[Any], list_format: ListFormat | None = None) -> list[ExtractedRow]:
     """Validate raw row dicts (from a model or a spreadsheet) into ExtractedRow values."""
+    fmt = list_format or ListFormat()
     rows: list[ExtractedRow] = []
     for position, item in enumerate(items, start=1):
         if not isinstance(item, dict):
@@ -144,7 +162,9 @@ def validate_rows(items: Iterable[Any]) -> list[ExtractedRow]:
         else:
             # Real numbers (spreadsheet cells) are already numbers; only text goes through the Argentine parser.
             is_number = isinstance(cost_value, (int, float, Decimal)) and not isinstance(cost_value, bool)
-            unit_cost = _finite_decimal(cost_value) if is_number else parse_amount(raw_cost)
+            unit_cost = (
+                _finite_decimal(cost_value) if is_number else parse_amount(raw_cost, fmt.decimal_separator)
+            )
             if unit_cost is None:
                 issues.append("unparseable_cost")
             elif unit_cost <= 0:
@@ -152,7 +172,7 @@ def validate_rows(items: Iterable[Any]) -> list[ExtractedRow]:
 
         pack_size = None
         if item.get("pack_size") is not None:
-            pack_size = _positive_number(item.get("pack_size"))
+            pack_size = _positive_number(item.get("pack_size"), fmt.decimal_separator)
             if pack_size is None:
                 issues.append("invalid_pack_size")
 

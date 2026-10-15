@@ -16,10 +16,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, Sequence
 
-from listaya.extraction.rows import ExtractedRow, validate_rows
+from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows
 from listaya.token_factory import TokenFactoryError
 
-SYSTEM_PROMPT = """You extract product rows from a supplier price list for a store in Argentina.
+SYSTEM_PROMPT = """You extract product rows from a supplier price list for a store.
 Reply with a JSON object: {"rows": [ ... ]}, one entry per product line, in the order they appear.
 Each entry has exactly these fields:
 - "source_row": for text input, the number after "L" at the start of the line; for images, 1, 2, 3...
@@ -28,7 +28,7 @@ Each entry has exactly these fields:
 - "pack_size": units per pack or box if the line states it (e.g. "x 100", "caja 12"), else null.
 - "unit": the unit or presentation as printed (e.g. "unidad", "caja", "kg", "lt"), else null.
 - "unit_cost_text": the price exactly as printed, keeping its separators (e.g. "1.234,56"); null if missing or unreadable.
-- "currency": "USD" if the list marks the price in dollars (US$, U$S, USD), "ARS" for pesos ($ or ARS), else null.
+- "currency": "USD" for US$, U$S or USD; "ARS" for ARS or pesos; a "$" alone means {local_currency}; else null.
 - "includes_vat": true if the list says prices include VAT (IVA incluido), false if it says VAT is extra (+ IVA), else null.
 - "confidence": your confidence from 0 to 1 that this entry is read correctly.
 Never invent, complete or calculate values. Skip titles, headers, totals and lines that are not products.
@@ -85,6 +85,7 @@ class ModelExtractor:
         batch_lines: int = 60,
         max_tokens: int = 8000,
         reasoning_effort: str | None = None,
+        list_format: ListFormat | None = None,
     ) -> None:
         if batch_lines < 1:
             raise ValueError("batch_lines must be >= 1")
@@ -94,6 +95,8 @@ class ModelExtractor:
         self._batch_lines = batch_lines
         self._max_tokens = max_tokens
         self._reasoning_effort = reasoning_effort
+        self._format = list_format or ListFormat()
+        self._system_prompt = SYSTEM_PROMPT.replace("{local_currency}", self._format.local_currency)
 
     async def extract_text(self, text: str) -> ExtractionResult:
         lines = [line.strip() for line in text.splitlines()]
@@ -148,7 +151,7 @@ class ModelExtractor:
         try:
             result = await self._client.chat(
                 model,
-                [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_content}],
+                [{"role": "system", "content": self._system_prompt}, {"role": "user", "content": user_content}],
                 max_tokens=self._max_tokens,
                 response_format={"type": "json_object"},
                 reasoning_effort=self._reasoning_effort,
@@ -159,4 +162,4 @@ class ModelExtractor:
         raw_rows = _parse_rows(result.content)
         if raw_rows is None:
             return [], "the model did not return valid JSON"
-        return validate_rows(raw_rows), None
+        return validate_rows(raw_rows, self._format), None
