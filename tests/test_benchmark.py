@@ -75,3 +75,14 @@ def test_cost_usd_uses_the_published_prices(model, prompt, completion, usd):
 )
 def test_models_that_think_by_default_are_asked_not_to(model, effort):
     assert reasoning_effort_for(model) == effort
+
+
+def test_unknown_file_names_are_rejected_before_any_model_call(monkeypatch):
+    import asyncio
+
+    import listaya.benchmark as benchmark
+
+    monkeypatch.setenv("RADEON_API_KEY", "rc-test")
+    monkeypatch.setattr(benchmark, "SAMPLES", SAMPLES)
+    with pytest.raises(SystemExit, match="no expected result for: otra_lista.pdf"):
+        asyncio.run(benchmark.run("T", "V", ["otra_lista.pdf"]))

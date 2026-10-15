@@ -101,6 +101,10 @@ async def run(text_model: str, vision_model: str, names: Sequence[str] | None) -
     if not api_key:
         raise SystemExit("RADEON_API_KEY is not set")
     expected = load_expected(SAMPLES / "esperado.json")
+    unknown = [name for name in names or [] if name not in expected]
+    if unknown:
+        # Checked before extracting anything, so no paid model call is spent on a list we cannot score.
+        raise SystemExit(f"no expected result for: {', '.join(unknown)} (known: {', '.join(expected)})")
     usage: list[UsageRecord] = []
     client = TokenFactoryClient(
         api_key, base_url=os.environ.get("TOKEN_FACTORY_BASE_URL", "").strip() or DEFAULT_BASE_URL,

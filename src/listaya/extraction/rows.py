@@ -33,13 +33,16 @@ _PRICE_STATEMENT_LINE = re.compile(r"\b(precio|precios|lista|valores|importes|pr
 _STANDALONE_MAX_WORDS = 4
 _OTHER_CHARGE = re.compile(r"\b(flete|fletes|envio|envios|shipping|freight|delivery)\b")
 _EXCEPTION = re.compile(r"\b(excepto|salvo|menos|except|excluding)\b")
+_VAT_WORD = re.compile(r"\b(iva|vat|tax)\b")
+# A VAT rate such as "21%" or "(10,5%)": dropped before matching, and not an amount.
+_VAT_RATE = re.compile(r"\(?\d+(?:[.,]\d+)?\s*%\)?")
 
 
 def vat_statement(text: str) -> bool | None:
     """True if the text says prices include VAT, False if they exclude it, None if it says neither or both."""
     plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
     # Drop the rate so "IVA 21% incluido" reads like "IVA incluido".
-    plain = re.sub(r"\(?\d+(?:[.,]\d+)?\s*%\)?", " ", plain)
+    plain = _VAT_RATE.sub(" ", plain)
     included, excluded = bool(_VAT_INCLUDED.search(plain)), bool(_VAT_EXCLUDED.search(plain))
     if included == excluded:
         return None
@@ -62,7 +65,7 @@ def list_vat_statement(text: str) -> bool | None:
             continue
         plain = unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode("ascii").lower()
         charge = _OTHER_CHARGE.search(plain)
-        vat_word = re.search(r"\b(iva|vat|tax)\b", plain)
+        vat_word = _VAT_WORD.search(plain)
         if _PRICE_STATEMENT_LINE.search(plain):
             # "Precios + IVA - Envío sin cargo" is about the list; "Precio del flete + IVA" is about freight.
             if not (charge and vat_word and charge.start() < vat_word.start()):
@@ -70,7 +73,7 @@ def list_vat_statement(text: str) -> bool | None:
         elif (
             len(re.findall(r"[a-z]+", plain)) <= _STANDALONE_MAX_WORDS
             # A rate such as "21%" is fine; any other number means a product row with an amount.
-            and not re.search(r"\d", re.sub(r"\d+(?:[.,]\d+)?\s*%", "", plain))
+            and not re.search(r"\d", _VAT_RATE.sub(" ", plain))
             and not _OTHER_CHARGE.search(plain)
             and not _EXCEPTION.search(plain)
         ):

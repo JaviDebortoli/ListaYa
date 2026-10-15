@@ -320,7 +320,9 @@ class TokenFactoryClient:
         return TokenFactoryError(status, message, attempts)
 
 
-# Published prices in USD per million tokens (input, output) for the shared endpoints.
+# Prices in USD per million tokens (input, output) for the shared endpoints, from the Token
+# Factory model catalog as of 2026-10-15 (they change: check GET /v1/models). Models missing
+# here have no known price, so cost_usd returns None and metrics leave them out of totals.
 MODEL_PRICES_USD_PER_MILLION: dict[str, tuple[Decimal, Decimal]] = {
     "DeepSeek-V4-Flash": (Decimal("0.14"), Decimal("0.28")),
     "DeepSeek-V4.1-Flash": (Decimal("0.14"), Decimal("0.28")),
