@@ -177,3 +177,21 @@ class TestVatStatement:
         client = FakeChatClient({"rows": [row(3, includes_vat=True)]})
         text = "Precios con IVA incluido\nExcepto herramientas: + IVA\nTornillo $1.234,56"
         assert run(ModelExtractor(client, text_model="T", vision_model="V").extract_text(text)).rows[0].includes_vat is True
+
+
+class TestListVatWiring:
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("LISTA DE PRECIOS\n+ IVA\nTornillo $1.234,56", False),
+            ("IVA incluido\nTornillo $1.234,56", True),
+            ("Precios finales\nTornillo $1.234,56\nFlete + IVA", None),  # footnote: keep the model's answer
+        ],
+    )
+    def test_extractor_applies_the_list_statement_to_every_row(self, text, expected):
+        client = FakeChatClient({"rows": [row(3, includes_vat=None), row(2, includes_vat=True)]})
+        result = run(ModelExtractor(client, text_model="T", vision_model="V").extract_text(text))
+        model_answers = {3: None, 2: True}
+        for extracted in result.rows:
+            want = expected if expected is not None else model_answers[extracted.source_row]
+            assert extracted.includes_vat is want

@@ -194,3 +194,19 @@ def test_list_vat_statement_only_reads_lines_about_prices(text, expected):
     from listaya.extraction.rows import list_vat_statement
 
     assert list_vat_statement(text) is expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("IVA incluido\nTornillo $10", True),
+        ("Valores expresados + IVA\nTornillo $10", False),
+        ("LISTA DE PRECIOS\n+ IVA\nTornillo $10", False),
+        ("Precios finales\nTornillo $10\nEnvío sin IVA", None),
+        ("Tornillo autoperforante caja x 100 unidades + IVA bonificado $10", None),  # long product line
+    ],
+)
+def test_list_vat_statement_also_reads_short_standalone_lines(text, expected):
+    from listaya.extraction.rows import list_vat_statement
+
+    assert list_vat_statement(text) is expected

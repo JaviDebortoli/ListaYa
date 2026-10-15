@@ -28,7 +28,10 @@ _VAT_EXCLUDED = re.compile(
     r"(\bs/|\bsin\b|\+|\bmas\b)\s*iva\b|(\bex|\bexcl?)\.?\s*(vat|tax)\b|(\+|\bplus\b)\s*(vat|tax)\b|\bnet\b"
 )
 # Lines that talk about the list's prices; a note such as "Flete + IVA" does not.
-_PRICE_STATEMENT_LINE = re.compile(r"\b(precio|precios|lista|price|prices)\b")
+_PRICE_STATEMENT_LINE = re.compile(r"\b(precio|precios|lista|valores|importes|price|prices)\b")
+# Short standalone lines ("IVA incluido", "+ IVA") also state it, unless they are about another charge.
+_STANDALONE_MAX_WORDS = 4
+_OTHER_CHARGE = re.compile(r"\b(flete|fletes|envio|envios|shipping|freight|delivery)\b")
 
 
 def vat_statement(text: str) -> bool | None:
@@ -41,14 +44,19 @@ def vat_statement(text: str) -> bool | None:
 
 
 def list_vat_statement(text: str) -> bool | None:
-    """VAT convention stated by a whole list, read only from lines about its prices.
+    """VAT convention stated by a whole list.
 
-    None when no such line states it or when they disagree.
+    Read from lines about its prices ("Precios + IVA") and from short standalone lines
+    ("IVA incluido", or "+ IVA" under a "LISTA DE PRECIOS" title), ignoring lines about
+    other charges ("Flete + IVA"). None when no line states it or when they disagree.
     """
     statements = set()
     for line in text.splitlines():
         plain = unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode("ascii").lower()
-        if _PRICE_STATEMENT_LINE.search(plain):
+        if _OTHER_CHARGE.search(plain):
+            continue
+        standalone = len(re.findall(r"\w+", plain)) <= _STANDALONE_MAX_WORDS
+        if standalone or _PRICE_STATEMENT_LINE.search(plain):
             statement = vat_statement(line)
             if statement is not None:
                 statements.add(statement)
