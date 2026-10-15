@@ -1,0 +1,26 @@
+sku,name,unit,pack_size,cost,price,category
+1001,Self-drilling screw 6x1,box,100,4.20,6.00,screws
+1002,Self-drilling screw 6x2,box,100,4.90,7.00,screws
+1003,Wood screw 8x1.5,box,100,3.80,5.45,screws
+1004,Drywall screw 6x1,box,100,3.10,4.45,screws
+1101,Nylon anchor 6 mm,bag,100,1.50,2.15,anchors
+1102,Nylon anchor 8 mm,bag,100,2.10,3.00,anchors
+1103,Nylon anchor 10 mm,bag,50,2.30,3.30,anchors
+1201,Common nail 2 in,lb,,3.60,5.15,nails
+1202,Common nail 2.5 in,lb,,3.50,5.00,nails
+1301,Claw hammer 16 oz,unit,,9.80,14.00,tools
+1302,Flat screwdriver 6 mm,unit,,2.60,3.70,tools
+1303,Combination pliers 8 in,unit,,8.70,12.45,tools
+1304,Tape measure 16 ft,unit,,4.30,6.15,tools
+1401,Electrical tape 66 ft,unit,,0.95,1.35,electrical
+1402,Building wire 12 AWG 100 ft roll,roll,,58.00,79.00,electrical
+1403,Duplex outlet,unit,,2.30,3.30,electrical
+1501,Clear silicone sealant 10 oz,unit,,3.90,5.55,adhesives
+1502,Contact cement 8 oz,unit,,4.60,6.55,adhesives
+1601,Wet sandpaper 120 grit,sheet,,0.52,0.75,abrasives
+1602,Wet sandpaper 220 grit,sheet,,0.52,0.75,abrasives
+1701,PTFE thread tape 3/4 in,unit,,0.48,0.70,plumbing
+1702,Ball valve 1/2 in,unit,,6.80,9.70,plumbing
+1801,Interior latex paint white 1 gal,unit,,21.00,30.00,paint
+1802,Paint roller 9 in,unit,,5.20,7.45,paint
+1803,Paint brush 2 in,unit,,1.90,2.70,paint

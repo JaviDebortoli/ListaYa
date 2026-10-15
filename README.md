@@ -44,6 +44,10 @@ python -m venv .venv
 
 `extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`).
 
+## Datos de ejemplo
+
+La carpeta `samples/` tiene datos ficticios en inglés y dólares: el catálogo de una ferretería y dos listas de proveedor (planilla y texto pegado). Ver `samples/README.md`.
+
 ## Licencia
 
 Ver el archivo `LICENSE`.
