@@ -62,7 +62,7 @@ class TestLoad:
         with pytest.raises(CatalogError, match="price"):
             CsvCatalog(path).load()
 
-    @pytest.mark.parametrize("value", ["abc", "NaN", "Infinity", "1.234,56"])
+    @pytest.mark.parametrize("value", ["abc", "NaN", "Infinity", "1.234,56", "1.234", "12.345.678", "1_000", "1e3", "+5"])
     def test_rejects_invalid_amount_with_line_number(self, tmp_path: Path, value: str):
         path = write_catalog(tmp_path / "bad.csv", f'1,Martillo,,,"{value}",20,,\n')
         with pytest.raises(CatalogError, match="line 2"):
@@ -185,3 +185,8 @@ class TestRobustness:
         path = write_catalog(tmp_path / "dup.csv", "1,Martillo,10,20,a,b\n", header=header)
         with pytest.raises(CatalogError, match="column"):
             CsvCatalog(path).load()
+
+    @pytest.mark.parametrize("value, expected", [("0.250", "0.250"), ("1.25", "1.25"), ("1234.5", "1234.5"), ("1234", "1234")])
+    def test_accepts_unambiguous_dot_decimals(self, tmp_path: Path, value: str, expected: str):
+        path = write_catalog(tmp_path / "ok.csv", f"1,Martillo,,,{value},20,,\n")
+        assert CsvCatalog(path).load()[0].cost == D(expected)

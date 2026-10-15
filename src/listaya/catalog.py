@@ -3,7 +3,8 @@
 The CSV is the source of truth for the catalog. Required columns: sku, name,
 cost, price. Optional columns: unit, pack_size, category. Any other column is
 kept untouched when prices are updated. Amounts use a dot as decimal separator
-and no thousands separator; empty cells mean "unknown". Files may be UTF-8
+and no thousands separator (a value like 1.234 is rejected as ambiguous);
+empty cells mean "unknown". Files may be UTF-8
 (with or without BOM) or Windows-1252, and are written back the same way.
 """
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 import stat
 import tempfile
 from dataclasses import dataclass
@@ -23,6 +25,10 @@ REQUIRED_COLUMNS = ("sku", "name", "cost", "price")
 _BOM = b"\xef\xbb\xbf"
 # Excel in Spanish often saves CSV as Windows-1252 rather than UTF-8.
 _FALLBACK_ENCODING = "cp1252"
+# Digits with an optional dot decimal part; no exponents, underscores, signs other than minus.
+_PLAIN_AMOUNT = re.compile(r"-?\d+(\.\d+)?")
+# Exactly three decimals after a 1-3 digit integer part reads like a thousands separator.
+_THOUSANDS_LOOKALIKE = re.compile(r"-?[1-9]\d{0,2}\.\d{3}")
 
 
 class CatalogError(ValueError):
@@ -56,13 +62,17 @@ def _amount(row: dict[str, str | None], column: str, line: int) -> Decimal | Non
     text = _text(row, column)
     if text is None:
         return None
+    if not _PLAIN_AMOUNT.fullmatch(text):
+        raise CatalogError(f"line {line}: '{column}' is not a valid amount: {text!r}")
+    if _THOUSANDS_LOOKALIKE.fullmatch(text):
+        # "1.234" is 1234 for an Argentine merchant but 1.234 for the parser: refuse to guess.
+        raise CatalogError(
+            f"line {line}: '{column}' is ambiguous: {text!r} (write amounts without thousands separators)"
+        )
     try:
-        value = Decimal(text)
+        return Decimal(text)
     except InvalidOperation:
         raise CatalogError(f"line {line}: '{column}' is not a valid amount: {text!r}") from None
-    if not value.is_finite():
-        raise CatalogError(f"line {line}: '{column}' is not a valid amount: {text!r}")
-    return value
 
 
 def _format(value: Decimal) -> str:
