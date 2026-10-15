@@ -15,3 +15,6 @@ __pycache__/
 # Local data
 *.db
 *.sqlite3
+
+# Local merchant data (catalog copy, SQLite database)
+data/

@@ -17,17 +17,34 @@ La lectura de listas (fotos, PDFs escaneados y texto desordenado) y la resoluci�
 
 ## Estado
 
-En desarrollo para la entrega del 18 de octubre de 2026. Las instrucciones para ejecutarlo se agregan a este archivo antes de la entrega.
+En desarrollo para la entrega del 18 de octubre de 2026. El flujo completo funciona por Telegram: recibir la lista, preguntar las dudas, resumir y actualizar el catálogo al aprobar.
 
 ## Configuración
 
 La configuración se lee de variables de entorno (por ejemplo, de un archivo `.env` local que no se versiona):
 
-| Variable | Para qué sirve |
-|---|---|
-| `RADEON_API_KEY` | Clave de AMD Token Factory |
-| `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) |
-| `TOKEN_FACTORY_BASE_URL` | Opcional. Base URL de la API; por defecto `https://developer.amd.com.cn/radeon/api/v1` |
+| Variable | Para qué sirve | Por defecto |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) | (obligatoria) |
+| `RADEON_API_KEY` | Clave de AMD Token Factory | (obligatoria) |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | Ids de los chats que pueden usar el bot, separados por coma. A un chat no autorizado el bot le responde con su id | vacío |
+| `LISTAYA_CATALOG_PATH` | Catálogo del comerciante en CSV; aprobar una lista lo actualiza | `data/catalogo.csv` |
+| `LISTAYA_DB_PATH` | Base SQLite con alias confirmados, IVA por proveedor y métricas | `data/listaya.db` |
+| `LISTAYA_TARGET_MARGIN` / `LISTAYA_MIN_MARGIN` | Margen objetivo y mínimo, sobre el precio de venta | `0.30` / `0.20` |
+| `LISTAYA_ROUNDING_STEP` | Redondeo del precio sugerido | `10` |
+| `LISTAYA_PRICES_INCLUDE_VAT` / `LISTAYA_VAT_RATE` | Si el catálogo tiene precios con IVA, y la alícuota | `false` / `0.21` |
+| `LISTAYA_CURRENCY` / `LISTAYA_DECIMAL_SEPARATOR` | Moneda del comercio y separador decimal de las listas | `ARS` / `,` |
+| `LISTAYA_TEXT_MODEL` / `LISTAYA_VISION_MODEL` | Modelos de Token Factory para texto e imágenes | `DeepSeek-V4-Flash` / `DeepSeek-V4.1-Flash` |
+| `TOKEN_FACTORY_BASE_URL` | Base URL de la API | `https://developer.amd.com.cn/radeon/api/v1` |
+
+Para probar con los datos de ejemplo, copiá el catálogo a la ubicación por defecto (la carpeta `data/` no se versiona):
+
+```bash
+mkdir data
+cp samples/ferreteria/catalogo.csv data/catalogo.csv
+```
+
+Al arrancar, el bot verifica que los modelos configurados existan en Token Factory. Si `TELEGRAM_ALLOWED_CHAT_IDS` está vacío, escribile al bot: te responde con el id de tu chat para agregarlo.
 
 ## Ejecutar en local
 

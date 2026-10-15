@@ -1,36 +1,78 @@
-import asyncio
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
-from listaya.app import ACK_FILE, ACK_TEXT, FILE_TOO_LARGE, ConfigError, acknowledge, load_settings
-from listaya.channel import MAX_DOWNLOAD_BYTES, Attachment, IncomingMessage
-from tests.fakes import FakeChannel
+from listaya.app import ConfigError, load_settings
+
+D = Decimal
+
+
+@pytest.fixture
+def base_env(tmp_path: Path) -> dict[str, str]:
+    catalog = tmp_path / "catalogo.csv"
+    catalog.write_text("sku,name,cost,price\n1,Martillo,10,20\n", encoding="utf-8")
+    return {
+        "TELEGRAM_BOT_TOKEN": "123:abc",
+        "RADEON_API_KEY": "rc-test",
+        "LISTAYA_CATALOG_PATH": str(catalog),
+    }
 
 
 class TestLoadSettings:
-    def test_reads_token(self):
-        assert load_settings({"TELEGRAM_BOT_TOKEN": "123:abc"}).telegram_token == "123:abc"
+    def test_defaults(self, base_env):
+        settings = load_settings(base_env)
+        assert settings.telegram_token == "123:abc"
+        assert settings.radeon_api_key == "rc-test"
+        assert settings.allowed_chat_ids == frozenset()
+        assert settings.db_path == Path("data/listaya.db")
+        assert (settings.rule.target_margin, settings.rule.min_margin) == (D("0.30"), D("0.20"))
+        assert settings.pricing.rounding_step == D("10")
+        assert settings.pricing.prices_include_vat is False
+        assert settings.pricing.currency == "ARS"
+        assert settings.list_format.decimal_separator == ","
+        assert (settings.text_model, settings.vision_model) == ("DeepSeek-V4-Flash", "DeepSeek-V4.1-Flash")
 
-    @pytest.mark.parametrize("env", [{}, {"TELEGRAM_BOT_TOKEN": ""}, {"TELEGRAM_BOT_TOKEN": "replace-with-botfather-token"}])
-    def test_missing_or_placeholder_token_fails_clearly(self, env):
+    def test_overrides(self, base_env):
+        env = {
+            **base_env,
+            "TELEGRAM_ALLOWED_CHAT_IDS": " 42, 77 ,",
+            "LISTAYA_TARGET_MARGIN": "0.35",
+            "LISTAYA_MIN_MARGIN": "0.25",
+            "LISTAYA_ROUNDING_STEP": "50",
+            "LISTAYA_PRICES_INCLUDE_VAT": "true",
+            "LISTAYA_TEXT_MODEL": "MiMo-V2.6-Flash",
+        }
+        settings = load_settings(env)
+        assert settings.allowed_chat_ids == frozenset({"42", "77"})
+        assert (settings.rule.target_margin, settings.rule.min_margin) == (D("0.35"), D("0.25"))
+        assert settings.pricing.rounding_step == D("50")
+        assert settings.pricing.prices_include_vat is True
+        assert settings.text_model == "MiMo-V2.6-Flash"
+
+    @pytest.mark.parametrize("token", ["", "replace-with-botfather-token"])
+    def test_missing_or_placeholder_token_fails_clearly(self, base_env, token):
         with pytest.raises(ConfigError, match="TELEGRAM_BOT_TOKEN"):
-            load_settings(env)
+            load_settings({**base_env, "TELEGRAM_BOT_TOKEN": token})
 
+    def test_missing_api_key_fails_clearly(self, base_env):
+        with pytest.raises(ConfigError, match="RADEON_API_KEY"):
+            load_settings({**base_env, "RADEON_API_KEY": ""})
 
-class TestAcknowledge:
-    def test_file_gets_processing_ack(self):
-        channel = FakeChannel()
-        attachment = Attachment(file_id="f", file_name="lista.pdf", mime_type="application/pdf", size=100)
-        asyncio.run(acknowledge(channel, IncomingMessage(chat_id="42", attachment=attachment)))
-        assert [(m.chat_id, m.text) for m in channel.sent] == [("42", ACK_FILE)]
+    def test_missing_catalog_points_to_the_sample(self, base_env, tmp_path):
+        with pytest.raises(ConfigError, match="samples/ferreteria/catalogo.csv"):
+            load_settings({**base_env, "LISTAYA_CATALOG_PATH": str(tmp_path / "nope.csv")})
 
-    def test_oversized_file_is_rejected_with_explanation(self):
-        channel = FakeChannel()
-        attachment = Attachment(file_id="f", file_name="x.pdf", mime_type=None, size=MAX_DOWNLOAD_BYTES + 1)
-        asyncio.run(acknowledge(channel, IncomingMessage(chat_id="42", attachment=attachment)))
-        assert [m.text for m in channel.sent] == [FILE_TOO_LARGE]
-
-    def test_text_gets_text_ack(self):
-        channel = FakeChannel()
-        asyncio.run(acknowledge(channel, IncomingMessage(chat_id="42", text="hola")))
-        assert [m.text for m in channel.sent] == [ACK_TEXT]
+    @pytest.mark.parametrize(
+        "name, value",
+        [
+            ("LISTAYA_TARGET_MARGIN", "treinta"),
+            ("LISTAYA_MIN_MARGIN", "0.5"),  # above the target margin
+            ("LISTAYA_ROUNDING_STEP", "0"),
+            ("LISTAYA_PRICES_INCLUDE_VAT", "quizas"),
+            ("LISTAYA_DECIMAL_SEPARATOR", ";"),
+        ],
+    )
+    def test_invalid_values_name_the_variable(self, base_env, name, value):
+        with pytest.raises(ConfigError, match=name):
+            load_settings({**base_env, name: value})
