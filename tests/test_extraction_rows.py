@@ -226,3 +226,18 @@ def test_list_vat_statement_prefers_price_lines_over_short_lines(text, expected)
     from listaya.extraction.rows import list_vat_statement
 
     assert list_vat_statement(text) is expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("IVA incluido\nPrecio del flete + IVA\nTornillo $10", True),  # the VAT there belongs to the freight
+        ("Precios + IVA - Envío sin cargo\nTornillo $10", False),
+        ("Lista octubre\nIVA 21% incluido\nTornillo $10", True),  # a rate is not an amount
+        ("Lista octubre\n+ IVA 10,5%\nTornillo $10", False),
+    ],
+)
+def test_list_vat_statement_final_edge_cases(text, expected):
+    from listaya.extraction.rows import list_vat_statement
+
+    assert list_vat_statement(text) is expected
