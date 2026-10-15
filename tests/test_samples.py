@@ -29,3 +29,14 @@ def test_sample_spreadsheet_list_is_read_without_the_model():
         "TORNILLO AUTOPERFORANTE 6X1",
         Decimal("5180.00"),
     )
+
+
+def test_sample_pdfs_have_the_expected_text_layers():
+    import pdfplumber
+
+    with pdfplumber.open(SAMPLES / "lista_pintureria_oeste.pdf") as pdf:
+        text = pdf.pages[0].extract_text()
+    assert "Látex interior blanco 4 L" in text and "Precios + IVA" in text
+    with pdfplumber.open(SAMPLES / "escaneo_corralon_san_martin.pdf") as pdf:
+        assert (pdf.pages[0].extract_text() or "").strip() == ""  # image only: goes to the vision model
+    assert (SAMPLES / "foto_corralon_san_martin.jpg").stat().st_size > 10_000

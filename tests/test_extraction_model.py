@@ -160,3 +160,20 @@ def test_prompt_tells_the_model_what_a_bare_dollar_sign_means():
     system = client.calls[0]["messages"][0]["content"]
     assert '"$" alone means USD' in system
     assert result.rows[0].unit_cost == Decimal("1250.00")
+
+
+class TestVatStatement:
+    @pytest.mark.parametrize(
+        "header, expected",
+        [("Precios + IVA. Consultar por cantidad.", False), ("Precios con IVA incluido", True), ("Lista octubre", None)],
+    )
+    def test_a_clear_vat_statement_in_the_text_overrides_the_model(self, header, expected):
+        # The model read "+ IVA" as VAT included on a real run; code decides when the list says it.
+        client = FakeChatClient({"rows": [row(2, includes_vat=True)]})
+        result = run(ModelExtractor(client, text_model="T", vision_model="V").extract_text(f"{header}\nTornillo $1.234,56"))
+        assert result.rows[0].includes_vat is (expected if expected is not None else True)
+
+    def test_contradictory_statements_leave_the_model_answer(self):
+        client = FakeChatClient({"rows": [row(3, includes_vat=True)]})
+        text = "Precios con IVA incluido\nExcepto herramientas: + IVA\nTornillo $1.234,56"
+        assert run(ModelExtractor(client, text_model="T", vision_model="V").extract_text(text)).rows[0].includes_vat is True

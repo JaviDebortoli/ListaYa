@@ -7,12 +7,18 @@ Datos **ficticios** de una ferretería de demostración y dos proveedores invent
 | `ferreteria/catalogo.csv` | Catálogo del comerciante: 25 productos con costo y precio vigente, sin IVA | Catálogo en CSV |
 | `ferreteria/lista_bulonera_sur.csv` | Lista de un proveedor en planilla, separada por `;`, precios sin IVA | Ruta de código (sin modelo): encabezado debajo de un título, filas de sección, subas, alertas de margen, una línea ambigua ("TORNILLO AUTOPERFORANTE" sin medida) y un producto nuevo (tarugo de 12 mm) |
 | `ferreteria/lista_distribuidora_norte.txt` | Lista pegada como texto, precios con IVA del 21% incluido | Ruta del modelo de texto: formato desprolijo, IVA a descontar, separador de miles (`$ 189.000`), un precio "consultar" y un producto nuevo (amoladora de banco) |
+| `ferreteria/lista_pintureria_oeste.pdf` | PDF con capa de texto, precios "+ IVA" (sin IVA) | Ruta de PDF con texto: el texto va al modelo y el código decide el IVA según lo que dice la lista. Incluye un producto nuevo (esmalte sintético) |
+| `ferreteria/foto_corralon_san_martin.jpg` | Foto de una lista impresa, levemente torcida, precios con IVA incluido | Ruta del modelo de visión. Incluye un producto nuevo (llave ajustable) |
+| `ferreteria/escaneo_corralon_san_martin.pdf` | La misma lista como PDF escaneado (solo imagen) | Ruta de PDF escaneado: cada página se convierte en imagen para el modelo de visión |
+
+El PDF, la foto y el escaneo se generan con `python scripts/make_sample_documents.py`.
 
 Para probar la extracción con estas listas:
 
 ```bash
 python -m listaya.extraction_check samples/ferreteria/lista_bulonera_sur.csv
 python -m listaya.extraction_check samples/ferreteria/lista_distribuidora_norte.txt
+python -m listaya.extraction_check samples/ferreteria/foto_corralon_san_martin.jpg
 ```
 
 Aprobar una lista en el bot reescribe el archivo del catálogo: usá una copia si querés conservar el original.

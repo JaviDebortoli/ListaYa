@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, Sequence
 
-from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows
+from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows, vat_statement
 from listaya.token_factory import TokenFactoryError
 
 SYSTEM_PROMPT = """You extract product rows from a supplier price list for a store.
@@ -29,7 +29,8 @@ Each entry has exactly these fields:
 - "unit": the unit or presentation as printed (e.g. "unidad", "caja", "kg", "lt"), else null.
 - "unit_cost_text": the price exactly as printed, keeping its separators (e.g. "1.234,56"); null if missing or unreadable.
 - "currency": "USD" for US$, U$S or USD; "ARS" for ARS or pesos; a "$" alone means {local_currency}; else null.
-- "includes_vat": true if the list says prices include VAT (IVA incluido), false if it says VAT is extra (+ IVA), else null.
+- "includes_vat": true if the list says prices include VAT ("IVA incluido", "con IVA", "c/IVA"); false if VAT is added
+  on top ("+ IVA", "más IVA", "sin IVA", "s/IVA"); else null. "+ IVA" means the price does NOT include VAT.
 - "confidence": your confidence from 0 to 1 that this entry is read correctly.
 Never invent, complete or calculate values. Skip titles, headers, totals and lines that are not products.
 If a line is illegible, still include it with null fields and low confidence."""
@@ -110,7 +111,13 @@ class ModelExtractor:
             rows.extend(batch_rows)
             if problem:
                 problems.append(problem)
-        return ExtractionResult(_unique_source_rows(rows, len(lines)), problems)
+        rows = _unique_source_rows(rows, len(lines))
+        # A clear VAT statement in the list is read by code and wins over the model (which once read
+        # "+ IVA" as VAT included). Contradictory or missing statements leave the model's answer.
+        statement = vat_statement(text)
+        if statement is not None:
+            rows = [dataclasses.replace(row, includes_vat=statement) for row in rows]
+        return ExtractionResult(rows, problems)
 
     async def extract_images(self, images: Sequence[tuple[bytes, str]]) -> ExtractionResult:
         """images: (content, mime type) per page or photo, in reading order."""

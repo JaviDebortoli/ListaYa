@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
@@ -17,6 +18,19 @@ CURRENCIES = frozenset({"ARS", "USD"})
 
 _CURRENCY_TOKENS = re.compile(r"(?i)(u\$s|us\$|ar\$|ars|usd|\$)")
 _DIGITS_AND_SEPARATORS = re.compile(r"\d[\d.,]*")
+
+# How price lists say whether VAT is included (Spanish and English), matched on lowercase text without accents.
+_VAT_INCLUDED = re.compile(r"(c/|con)\s*iva|iva\s*incl|incl\.?\s*(vat|tax)|(vat|tax)\s*incl")
+_VAT_EXCLUDED = re.compile(r"(s/|sin|\+|mas)\s*iva|(\bex|excl?)\.?\s*(vat|tax)|(\+|plus)\s*(vat|tax)|\bnet\b")
+
+
+def vat_statement(text: str) -> bool | None:
+    """True if the text says prices include VAT, False if they exclude it, None if it says neither or both."""
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+    included, excluded = bool(_VAT_INCLUDED.search(plain)), bool(_VAT_EXCLUDED.search(plain))
+    if included == excluded:
+        return None
+    return included
 
 
 @dataclass(frozen=True)

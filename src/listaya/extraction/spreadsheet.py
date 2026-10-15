@@ -16,7 +16,7 @@ import zipfile
 from decimal import Decimal
 from typing import Any
 
-from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows
+from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows, vat_statement
 
 HEADER_SEARCH_ROWS = 20
 
@@ -129,15 +129,6 @@ def _header_fields(row: list[Any]) -> dict[str, int]:
     return fields
 
 
-def _vat_from_header(header: str) -> bool | None:
-    text = _normalize(header)
-    if re.search(r"(c/|con)\s*iva|iva\s*incl|incl\.?\s*(vat|tax)|(vat|tax)\s*incl", text):
-        return True
-    if re.search(r"(s/|sin|\+|mas)\s*iva|(\bex|excl?)\.?\s*(vat|tax)|(\+|plus)\s*(vat|tax)|\bnet\b", text):
-        return False
-    return None
-
-
 def _currency_from_header(header: str, local_currency: str) -> str | None:
     text = _normalize(header)
     if re.search(r"u\$s|us\$|usd|dolar", text):
@@ -160,7 +151,7 @@ def rows_from_table(table: list[list[Any]], list_format: ListFormat | None = Non
         return None
 
     price_header = str(header[fields["unit_cost_text"]])
-    includes_vat = _vat_from_header(price_header)
+    includes_vat = vat_statement(price_header)
     currency = _currency_from_header(price_header, fmt.local_currency)
 
     raw_rows: list[dict[str, Any]] = []

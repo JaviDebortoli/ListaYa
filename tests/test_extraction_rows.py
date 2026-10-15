@@ -152,3 +152,23 @@ class TestUsFormat:
     def test_rejects_unknown_decimal_separator(self):
         with pytest.raises(ValueError):
             ListFormat(decimal_separator=";", local_currency="USD")
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("Precios + IVA", False),
+        ("Precios más IVA", False),
+        ("Precio s/IVA", False),
+        ("Precios sin IVA", False),
+        ("Precios con IVA incluido", True),
+        ("Precio c/IVA", True),
+        ("IVA incluido", True),
+        ("Lista de precios", None),
+        ("Precios con IVA incluido salvo herramientas + IVA", None),
+    ],
+)
+def test_vat_statement(text, expected):
+    from listaya.extraction.rows import vat_statement
+
+    assert vat_statement(text) is expected
