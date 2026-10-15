@@ -1,0 +1,6 @@
+# Never convert line endings in binary samples (a PDF with CRLF inserted is corrupt).
+*.pdf binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.xlsx binary
