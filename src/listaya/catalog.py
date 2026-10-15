@@ -3,7 +3,8 @@
 The CSV is the source of truth for the catalog. Required columns: sku, name,
 cost, price. Optional columns: unit, pack_size, category. Any other column is
 kept untouched when prices are updated. Amounts use a dot as decimal separator
-and no thousands separator (a value like 1.234 is rejected as ambiguous);
+and no thousands separator (a value like 1.234 is rejected as ambiguous); updates
+are written rounded to cents, so they always load back;
 empty cells mean "unknown". Files may be UTF-8
 (with or without BOM) or Windows-1252, and are written back the same way.
 """
@@ -17,7 +18,7 @@ import re
 import stat
 import tempfile
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
@@ -25,6 +26,7 @@ REQUIRED_COLUMNS = ("sku", "name", "cost", "price")
 _BOM = b"\xef\xbb\xbf"
 # Excel in Spanish often saves CSV as Windows-1252 rather than UTF-8.
 _FALLBACK_ENCODING = "cp1252"
+_CENT = Decimal("0.01")
 # Digits with an optional dot decimal part; no exponents, underscores, signs other than minus.
 _PLAIN_AMOUNT = re.compile(r"-?\d+(\.\d+)?")
 # Exactly three decimals after a 1-3 digit integer part reads like a thousands separator.
@@ -76,7 +78,9 @@ def _amount(row: dict[str, str | None], column: str, line: int) -> Decimal | Non
 
 
 def _format(value: Decimal) -> str:
-    return format(value, "f")
+    """Write an amount in cents without trailing zeros: never three decimals, so never ambiguous."""
+    cents = value.quantize(_CENT, rounding=ROUND_HALF_UP)
+    return format(cents.normalize(), "f")
 
 
 class _ParsedFile(NamedTuple):
@@ -117,14 +121,21 @@ class CsvCatalog:
 
     def apply_updates(self, updates: Iterable[PriceUpdate]) -> None:
         """Write new costs and prices. Validates everything first; on error the file is untouched."""
-        pending: dict[str, PriceUpdate] = {}
+        pending: dict[str, tuple[str, str]] = {}
         for update in updates:
             if update.sku in pending:
                 raise CatalogError(f"sku {update.sku!r} appears more than once in the update")
+            texts = []
             for value in (update.cost, update.price):
                 if not value.is_finite() or value <= 0:
                     raise CatalogError(f"sku {update.sku!r}: cost and price must be positive numbers")
-            pending[update.sku] = update
+                text = _format(value)
+                # Whatever we write must load back as the same positive amount.
+                written = _amount({"value": text}, "value", 0)
+                if written is None or written <= 0:
+                    raise CatalogError(f"sku {update.sku!r}: {value} rounds to {text!r}, which is not a valid amount")
+                texts.append(text)
+            pending[update.sku] = (texts[0], texts[1])
 
         self.load()  # validate the whole file before rewriting it
         parsed = self._read()
@@ -135,10 +146,9 @@ class CsvCatalog:
             raise CatalogError(f"unknown sku(s): {', '.join(missing)}")
 
         for _, row in rows:
-            update = pending.get(_text(row, "sku") or "")
-            if update is not None:
-                row["cost"] = _format(update.cost)
-                row["price"] = _format(update.price)
+            texts = pending.get(_text(row, "sku") or "")
+            if texts is not None:
+                row["cost"], row["price"] = texts
 
         first_line = parsed.raw.split(b"\n", 1)[0]
         lineterminator = "\r\n" if first_line.endswith(b"\r") else "\n"

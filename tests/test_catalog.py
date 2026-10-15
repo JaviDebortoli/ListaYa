@@ -144,13 +144,13 @@ class TestRobustness:
         CsvCatalog(path).apply_updates([PriceUpdate(sku="1", cost=D("12"), price=D("30"))])
         assert path.read_bytes() == b"\xef\xbb\xbfsku,name,cost,price\r\n1,Martillo,12,30\r\n"
 
-    def test_writes_long_decimals_in_plain_notation(self, catalog_path: Path):
+    def test_writes_long_decimals_rounded_to_cents_in_plain_notation(self, catalog_path: Path):
         cost = D("826.4462809917355371900826446")
         catalog = CsvCatalog(catalog_path)
         catalog.apply_updates([PriceUpdate(sku="2231", cost=cost, price=D("1.18E+3"))])
         text = catalog_path.read_text(encoding="utf-8")
-        assert "826.4462809917355371900826446,1180," in text
-        assert {p.sku: p for p in catalog.load()}["2231"].cost == cost
+        assert "826.45,1180," in text
+        assert {p.sku: p for p in catalog.load()}["2231"].cost == D("826.45")
 
     @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions")
     def test_preserves_file_permissions(self, catalog_path: Path):
@@ -190,3 +190,17 @@ class TestRobustness:
     def test_accepts_unambiguous_dot_decimals(self, tmp_path: Path, value: str, expected: str):
         path = write_catalog(tmp_path / "ok.csv", f"1,Martillo,,,{value},20,,\n")
         assert CsvCatalog(path).load()[0].cost == D(expected)
+
+    @pytest.mark.parametrize("cost, written", [(D("103.455"), "103.46"), (D("85.50"), "85.5"), (D("1210.00"), "1210")])
+    def test_updated_amounts_are_written_in_cents_and_stay_loadable(self, catalog_path: Path, cost, written):
+        # 85.5 with 21% VAT is 103.455, which would read like "103 thousand 455" if written as is.
+        catalog = CsvCatalog(catalog_path)
+        catalog.apply_updates([PriceUpdate(sku="2231", cost=cost, price=D("1430"))])
+        assert f",{written},1430," in catalog_path.read_text(encoding="utf-8")
+        assert {p.sku: p for p in catalog.load()}["2231"].cost == D(written)
+
+    def test_rejects_amount_that_rounds_to_zero_without_writing(self, catalog_path: Path):
+        before = catalog_path.read_bytes()
+        with pytest.raises(CatalogError, match="rounds to"):
+            CsvCatalog(catalog_path).apply_updates([PriceUpdate(sku="2231", cost=D("0.004"), price=D("10"))])
+        assert catalog_path.read_bytes() == before
