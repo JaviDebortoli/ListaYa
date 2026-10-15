@@ -1,0 +1,15 @@
+.git
+.venv
+.idea
+.atl
+.env
+data
+odd
+tests
+scripts
+PRD.md
+amd-token-factory-docs.md
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+*.egg-info

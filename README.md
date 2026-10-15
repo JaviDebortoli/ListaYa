@@ -61,6 +61,17 @@ python -m venv .venv
 
 `extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`). Por defecto asume listas argentinas (pesos y coma decimal); para listas en dólares con punto decimal, agregá `--currency USD --decimal-separator .`.
 
+## Ejecutar con Docker
+
+```bash
+docker build -t listaya .
+mkdir data
+cp samples/ferreteria/catalogo.csv data/catalogo.csv   # o tu propio catálogo
+docker run --rm --env-file .env -v "$(pwd)/data:/app/data" listaya
+```
+
+El contenedor corre como usuario sin privilegios y guarda el catálogo y la base SQLite en `/app/data` (el volumen montado), así que los precios aprobados y lo aprendido persisten entre reinicios.
+
 ## Datos de ejemplo
 
 La carpeta `samples/` tiene datos ficticios de una ferretería argentina, en pesos: el catálogo y dos listas de proveedor (planilla y texto pegado). Ver `samples/README.md`.
