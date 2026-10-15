@@ -20,8 +20,15 @@ _CURRENCY_TOKENS = re.compile(r"(?i)(u\$s|us\$|ar\$|ars|usd|\$)")
 _DIGITS_AND_SEPARATORS = re.compile(r"\d[\d.,]*")
 
 # How price lists say whether VAT is included (Spanish and English), matched on lowercase text without accents.
-_VAT_INCLUDED = re.compile(r"(c/|con)\s*iva|iva\s*incl|incl\.?\s*(vat|tax)|(vat|tax)\s*incl")
-_VAT_EXCLUDED = re.compile(r"(s/|sin|\+|mas)\s*iva|(\bex|excl?)\.?\s*(vat|tax)|(\+|plus)\s*(vat|tax)|\bnet\b")
+# Whole words only, so ordinary words such as "masiva" never read as "mas iva".
+_VAT_INCLUDED = re.compile(
+    r"(\bc/|\bcon\b)\s*iva\b|\biva\s*incl|\bincl\.?\s*(vat|tax)\b|\b(vat|tax)\s*incl"
+)
+_VAT_EXCLUDED = re.compile(
+    r"(\bs/|\bsin\b|\+|\bmas\b)\s*iva\b|(\bex|\bexcl?)\.?\s*(vat|tax)\b|(\+|\bplus\b)\s*(vat|tax)\b|\bnet\b"
+)
+# Lines that talk about the list's prices; a note such as "Flete + IVA" does not.
+_PRICE_STATEMENT_LINE = re.compile(r"\b(precio|precios|lista|price|prices)\b")
 
 
 def vat_statement(text: str) -> bool | None:
@@ -31,6 +38,21 @@ def vat_statement(text: str) -> bool | None:
     if included == excluded:
         return None
     return included
+
+
+def list_vat_statement(text: str) -> bool | None:
+    """VAT convention stated by a whole list, read only from lines about its prices.
+
+    None when no such line states it or when they disagree.
+    """
+    statements = set()
+    for line in text.splitlines():
+        plain = unicodedata.normalize("NFKD", line).encode("ascii", "ignore").decode("ascii").lower()
+        if _PRICE_STATEMENT_LINE.search(plain):
+            statement = vat_statement(line)
+            if statement is not None:
+                statements.add(statement)
+    return statements.pop() if len(statements) == 1 else None
 
 
 @dataclass(frozen=True)

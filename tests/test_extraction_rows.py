@@ -172,3 +172,25 @@ def test_vat_statement(text, expected):
     from listaya.extraction.rows import vat_statement
 
     assert vat_statement(text) is expected
+
+
+@pytest.mark.parametrize("text", ["Pintura masiva antióxido", "Kit sin ivas", "Comisión", "conivacion"])
+def test_vat_statement_needs_whole_words(text):
+    from listaya.extraction.rows import vat_statement
+
+    assert vat_statement(text) is None
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("LISTA OCTUBRE\nPrecios + IVA\nTornillo $10", False),
+        ("Precios finales\nTornillo $10\nFlete + IVA", None),  # a footnote about freight says nothing about prices
+        ("Lista de precios con IVA incluido\nEnvío sin IVA\nTornillo $10", True),
+        ("Tornillo masiva $10\nTarugo $5", None),
+    ],
+)
+def test_list_vat_statement_only_reads_lines_about_prices(text, expected):
+    from listaya.extraction.rows import list_vat_statement
+
+    assert list_vat_statement(text) is expected

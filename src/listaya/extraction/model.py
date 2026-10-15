@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, Sequence
 
-from listaya.extraction.rows import ExtractedRow, ListFormat, validate_rows, vat_statement
+from listaya.extraction.rows import ExtractedRow, ListFormat, list_vat_statement, validate_rows
 from listaya.token_factory import TokenFactoryError
 
 SYSTEM_PROMPT = """You extract product rows from a supplier price list for a store.
@@ -114,7 +114,7 @@ class ModelExtractor:
         rows = _unique_source_rows(rows, len(lines))
         # A clear VAT statement in the list is read by code and wins over the model (which once read
         # "+ IVA" as VAT included). Contradictory or missing statements leave the model's answer.
-        statement = vat_statement(text)
+        statement = list_vat_statement(text)
         if statement is not None:
             rows = [dataclasses.replace(row, includes_vat=statement) for row in rows]
         return ExtractionResult(rows, problems)
