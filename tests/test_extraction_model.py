@@ -203,3 +203,10 @@ def test_models_that_think_by_default_get_their_reasoning_turned_down():
     run(extractor.extract_text("a $1"))
     run(extractor.extract_images([(b"x", "image/png")]))
     assert [call["reasoning_effort"] for call in client.calls] == [None, "none"]
+
+
+def test_numeric_prices_from_the_model_are_read_with_the_list_format():
+    # A model may answer 4.828 (a JSON number) for "$ 4.828": in an Argentine list that is 4828, not 4.83.
+    client = FakeChatClient({"rows": [{"source_row": 1, "description": "Clavo", "unit_cost_text": 4.828}]})
+    result = run(ModelExtractor(client, text_model="T", vision_model="V").extract_text("Clavo $ 4.828"))
+    assert result.rows[0].unit_cost == Decimal("4828")

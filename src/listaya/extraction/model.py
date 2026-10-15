@@ -170,4 +170,4 @@ class ModelExtractor:
         raw_rows = _parse_rows(result.content)
         if raw_rows is None:
             return [], "the model did not return valid JSON"
-        return validate_rows(raw_rows, self._format), None
+        return validate_rows(raw_rows, self._format, numbers_are_text=True), None

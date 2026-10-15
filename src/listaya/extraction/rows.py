@@ -201,7 +201,9 @@ def _confidence(value: Any) -> float:
     return value if math.isfinite(value) and 0.0 <= value <= 1.0 else 0.0
 
 
-def validate_rows(items: Iterable[Any], list_format: ListFormat | None = None) -> list[ExtractedRow]:
+def validate_rows(
+    items: Iterable[Any], list_format: ListFormat | None = None, *, numbers_are_text: bool = False
+) -> list[ExtractedRow]:
     """Validate raw row dicts (from a model or a spreadsheet) into ExtractedRow values."""
     fmt = list_format or ListFormat()
     rows: list[ExtractedRow] = []
@@ -221,7 +223,12 @@ def validate_rows(items: Iterable[Any], list_format: ListFormat | None = None) -
             issues.append("missing_cost")
         else:
             # Real numbers (spreadsheet cells) are already numbers; only text goes through the Argentine parser.
-            is_number = isinstance(cost_value, (int, float, Decimal)) and not isinstance(cost_value, bool)
+            # numbers_are_text: a model may send 4.828 as a JSON number for "$ 4.828"; read it as printed.
+            is_number = (
+                isinstance(cost_value, (int, float, Decimal))
+                and not isinstance(cost_value, bool)
+                and not numbers_are_text
+            )
             unit_cost = (
                 _finite_decimal(cost_value) if is_number else parse_amount(raw_cost, fmt.decimal_separator)
             )
