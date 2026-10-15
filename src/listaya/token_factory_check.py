@@ -13,7 +13,7 @@ import asyncio
 import json
 import os
 
-from listaya.token_factory import TokenFactoryClient
+from listaya.token_factory import DEFAULT_BASE_URL, TokenFactoryClient
 
 CHECK_MODEL = "DeepSeek-V4-Flash"
 
@@ -22,7 +22,8 @@ async def run(chat: bool) -> None:
     api_key = os.environ.get("RADEON_API_KEY", "").strip()
     if not api_key:
         raise SystemExit("RADEON_API_KEY is not set")
-    client = TokenFactoryClient(api_key, on_usage=lambda record: print(f"usage: {record}"))
+    base_url = os.environ.get("TOKEN_FACTORY_BASE_URL", "").strip() or DEFAULT_BASE_URL
+    client = TokenFactoryClient(api_key, base_url=base_url, on_usage=lambda record: print(f"usage: {record}"))
     try:
         models = await client.list_models()
         print(f"models ({len(models)}): {', '.join(models)}")

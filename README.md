@@ -27,6 +27,7 @@ La configuración se lee de variables de entorno (por ejemplo, de un archivo `.e
 |---|---|
 | `RADEON_API_KEY` | Clave de AMD Token Factory |
 | `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) |
+| `TOKEN_FACTORY_BASE_URL` | Opcional. Base URL de la API; por defecto `https://developer.amd.com.cn/radeon/api/v1` |
 
 ## Ejecutar en local
 

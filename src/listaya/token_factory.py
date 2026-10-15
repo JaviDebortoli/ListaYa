@@ -19,16 +19,21 @@ import httpx
 
 DEFAULT_BASE_URL = "https://developer.amd.com.cn/radeon/api/v1"
 RETRYABLE_STATUSES = frozenset({429, 502, 503})
+# Failures before the request reached the model: safe to retry like a 502/503.
+# Read/write timeouts are not here: the request may already be processed and billed.
+RETRYABLE_TRANSPORT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError)
 
 Sleep = Callable[[float], Awaitable[None]]
 
 
 class TokenFactoryError(Exception):
-    def __init__(self, status: int | None, message: str, attempts: int = 1) -> None:
+    def __init__(self, status: int | None, message: str, attempts: int = 1, usage_status: str | None = None) -> None:
         super().__init__(f"Token Factory error {status}: {message}" if status else message)
         self.status = status
         self.message = message
         self.attempts = attempts
+        # How the failure is reported in UsageRecord.status: the HTTP status, or "network" / "malformed".
+        self.usage_status = usage_status or str(status)
 
 
 class RetriesExhaustedError(TokenFactoryError):
@@ -141,6 +146,7 @@ class TokenFactoryClient:
         max_attempts: int = 5,
         backoff_base_seconds: float = 1.0,
         backoff_cap_seconds: float = 30.0,
+        max_retry_after_seconds: float = 120.0,
         timeout_seconds: float = 600.0,
         on_usage: Callable[[UsageRecord], None] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -161,6 +167,7 @@ class TokenFactoryClient:
         self._max_attempts = max_attempts
         self._backoff_base = backoff_base_seconds
         self._backoff_cap = backoff_cap_seconds
+        self._max_retry_after = max_retry_after_seconds
         self._on_usage = on_usage
         self._sleep = sleep
         self._random = random
@@ -193,15 +200,21 @@ class TokenFactoryClient:
         try:
             response, attempts = await self._send("POST", "chat/completions", json=payload)
         except TokenFactoryError as error:
-            self._record(model, 0, 0, started, error.attempts, str(error.status))
+            self._record(model, 0, 0, started, error.attempts, error.usage_status)
             raise
 
-        body = response.json()
-        choice = body["choices"][0]
-        usage = body.get("usage") or {}
-        details = usage.get("completion_tokens_details") or {}
-        prompt_tokens = int(usage.get("prompt_tokens") or 0)
-        completion_tokens = int(usage.get("completion_tokens") or 0)
+        try:
+            body = response.json()
+            choice = body["choices"][0]
+            usage = body.get("usage") or {}
+            details = usage.get("completion_tokens_details") or {}
+            prompt_tokens = int(usage.get("prompt_tokens") or 0)
+            completion_tokens = int(usage.get("completion_tokens") or 0)
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            self._record(model, 0, 0, started, attempts, "malformed")
+            raise TokenFactoryError(
+                response.status_code, f"malformed response body: {response.text[:200]!r}", attempts, "malformed"
+            ) from None
         latency = self._record(model, prompt_tokens, completion_tokens, started, attempts, "ok")
 
         content = (choice.get("message") or {}).get("content") or ""
@@ -250,8 +263,16 @@ class TokenFactoryClient:
     async def _send(self, method: str, path: str, **kwargs: Any) -> tuple[httpx.Response, int]:
         for attempt in range(1, self._max_attempts + 1):
             await self._limiter.acquire()
-            async with self._semaphore:
-                response = await self._http.request(method, path, **kwargs)
+            try:
+                async with self._semaphore:
+                    response = await self._http.request(method, path, **kwargs)
+            except RETRYABLE_TRANSPORT_ERRORS as error:
+                if attempt == self._max_attempts:
+                    raise RetriesExhaustedError(None, f"network error: {error!r}", attempt, "network") from error
+                await self._sleep(self._backoff(attempt))
+                continue
+            except httpx.TransportError as error:
+                raise TokenFactoryError(None, f"network error: {error!r}", attempt, "network") from error
 
             if response.is_success:
                 return response, attempt
@@ -263,6 +284,11 @@ class TokenFactoryClient:
                 raise RetriesExhaustedError(response.status_code, message, attempt)
 
             retry_after = _retry_after(response) if response.status_code == 429 else None
+            if retry_after is not None and retry_after > self._max_retry_after:
+                # A long wait (e.g. the daily cap) would look like a hang: fail now and say when to retry.
+                raise RetriesExhaustedError(
+                    429, f"{message} (service asks to retry after {retry_after:.0f} s)", attempt
+                )
             if retry_after is not None:
                 await self._sleep(retry_after + self._random())
             else:

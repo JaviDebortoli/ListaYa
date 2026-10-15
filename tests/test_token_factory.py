@@ -259,3 +259,78 @@ class TestModelsAndUsage:
         client, _ = make_client(handler)
         assert run(client.usage()) == {"used": 0.1, "remaining": 0.9}
         assert seen[0].url == "https://developer.amd.com.cn/radeon/api/v1/usage?include_recent=true"
+
+
+class TestNetworkAndMalformedResponses:
+    @pytest.mark.parametrize("error", [httpx.ConnectError("refused"), httpx.ConnectTimeout("slow"), httpx.RemoteProtocolError("dropped")])
+    def test_retries_connection_failures(self, error):
+        outcomes: list = [error, httpx.Response(200, json=ok_body())]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        client, rec = make_client(handler)
+        result = run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert result.attempts == 2
+        assert rec.sleeps == [0.5]
+
+    def test_connection_failures_exhaust_into_typed_error_with_usage_record(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("refused")
+
+        records: list[UsageRecord] = []
+        client, _ = make_client(handler, max_attempts=2, on_usage=records.append)
+        with pytest.raises(RetriesExhaustedError, match="refused"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert [(r.status, r.attempts) for r in records] == [("network", 2)]
+
+    def test_read_timeout_is_not_retried(self):
+        # The request may already have been processed and billed: fail instead of paying twice.
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            raise httpx.ReadTimeout("no answer")
+
+        records: list[UsageRecord] = []
+        client, _ = make_client(handler, on_usage=records.append)
+        with pytest.raises(TokenFactoryError, match="no answer"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert len(calls) == 1
+        assert [r.status for r in records] == ["network"]
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            httpx.Response(200, text="<html>gateway</html>"),
+            httpx.Response(200, json={"choices": []}),
+            httpx.Response(200, json={"object": "chat.completion"}),
+        ],
+    )
+    def test_malformed_success_body_is_a_typed_error_with_usage_record(self, response):
+        records: list[UsageRecord] = []
+        client, _ = make_client(lambda r: response, on_usage=records.append)
+        with pytest.raises(TokenFactoryError, match="malformed"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert [r.status for r in records] == ["malformed"]
+
+    def test_long_retry_after_fails_fast_instead_of_sleeping(self):
+        body = {"error": {"message": "daily quota"}}
+        client, rec = make_client(lambda r: httpx.Response(429, headers={"Retry-After": "3600"}, json=body))
+        with pytest.raises(RetriesExhaustedError, match="3600"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert rec.sleeps == []
+
+    def test_base_url_can_be_overridden(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200, json=ok_body())
+
+        client, _ = make_client(handler, base_url="https://proxy.example/v1")
+        run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert str(seen[0].url) == "https://proxy.example/v1/chat/completions"
