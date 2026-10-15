@@ -210,17 +210,20 @@ class TokenFactoryClient:
             details = usage.get("completion_tokens_details") or {}
             prompt_tokens = int(usage.get("prompt_tokens") or 0)
             completion_tokens = int(usage.get("completion_tokens") or 0)
+            reasoning_tokens = int(details.get("reasoning_tokens") or 0)
+            finish_reason = choice.get("finish_reason")
+            content = (choice.get("message") or {}).get("content") or ""
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            # Any unexpected shape becomes one typed error, so a caller can report it and keep going.
             self._record(model, 0, 0, started, attempts, "malformed")
             raise TokenFactoryError(
                 response.status_code, f"malformed response body: {response.text[:200]!r}", attempts, "malformed"
             ) from None
-        content = (choice.get("message") or {}).get("content") or ""
         if not isinstance(content, str) or not content.strip():
             self._record(model, prompt_tokens, completion_tokens, started, attempts, "empty")
             raise EmptyResponseError(
                 200,
-                f"empty content (finish_reason={choice.get('finish_reason')}); raise max_tokens or lower reasoning",
+                f"empty content (finish_reason={finish_reason}); raise max_tokens or lower reasoning",
                 attempts,
                 "empty",
             )
@@ -228,10 +231,10 @@ class TokenFactoryClient:
         return ChatResult(
             content=content,
             model=body.get("model", model),
-            finish_reason=choice.get("finish_reason"),
+            finish_reason=finish_reason,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            reasoning_tokens=int(details.get("reasoning_tokens") or 0),
+            reasoning_tokens=reasoning_tokens,
             latency_seconds=latency,
             attempts=attempts,
             rate_limit={k: v for k, v in response.headers.items() if k.lower().startswith("x-ratelimit")},

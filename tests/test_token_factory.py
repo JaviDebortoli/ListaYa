@@ -351,3 +351,21 @@ class TestUsageAccounting:
         client, _ = make_client(lambda r: response)
         with pytest.raises(TokenFactoryError, match="malformed"):
             run(client.list_models())
+
+
+class TestOddSuccessShapes:
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"choices": [{"message": "hola"}]},
+            {"choices": ["x"]},
+            {"choices": [{"message": {"content": "ok"}}], "usage": {"completion_tokens_details": {"reasoning_tokens": "many"}}},
+            {"choices": [{"message": {"content": "ok"}}], "usage": "none"},
+        ],
+    )
+    def test_unexpected_shapes_are_typed_malformed_errors(self, body):
+        records: list[UsageRecord] = []
+        client, _ = make_client(lambda r: httpx.Response(200, json=body), on_usage=records.append)
+        with pytest.raises(TokenFactoryError, match="malformed"):
+            run(client.chat("DeepSeek-V4-Flash", MESSAGES, max_tokens=10))
+        assert [r.status for r in records] == ["malformed"]

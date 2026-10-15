@@ -181,3 +181,16 @@ class TestConfirmation:
 def test_rejects_inverted_thresholds():
     with pytest.raises(ValueError):
         Matcher(CATALOG, InMemoryAliasStore(), FakeChatClient(), model="T", auto_accept=0.5, ask_from=0.6)
+
+
+class TestAmbiguity:
+    def test_tie_between_compatible_candidates_is_not_matched_automatically(self):
+        # No measure in the supplier line, so both 6x1 and 6x2 are compatible and score the same.
+        client = FakeChatClient({"decisions": [{"row": 1, "sku": "2231"}]})
+        [result] = run(matcher(client).match(SUPPLIER, [row("Tornillo autoperforante")]))
+        assert result.status == MatchStatus.NEEDS_CONFIRMATION
+        assert len(client.calls) == 1
+
+    def test_close_runner_up_with_incompatible_measure_does_not_block_the_match(self):
+        [result] = run(matcher().match(SUPPLIER, [row("TORNILLO AUTOPERFORANTE 6X1")]))
+        assert (result.status, result.sku) == (MatchStatus.MATCHED, "2231")

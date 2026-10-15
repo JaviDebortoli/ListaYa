@@ -3,7 +3,8 @@
 1. Supplier code already confirmed for a product (alias).
 2. Description already confirmed by the merchant (alias).
 3. Approximate text similarity in code, plus an attribute check: measures in the
-   names (6x1, 2.25 L) and pack sizes must agree.
+   names (6x1, 2.25 L) and pack sizes must agree, and no other compatible product
+   may score almost the same.
 4. Only rows in the doubtful band go to the model, in batches, with their closest
    candidates. The model narrows the choice to one suggestion or rejects all of
    them; it never matches on its own.
@@ -118,6 +119,7 @@ class Matcher:
         model: str,
         auto_accept: float = 0.90,
         ask_from: float = 0.60,
+        ambiguity_margin: float = 0.05,
     ) -> None:
         if not 0.0 <= ask_from <= auto_accept <= 1.0:
             raise ValueError("thresholds must satisfy 0 <= ask_from <= auto_accept <= 1")
@@ -128,6 +130,7 @@ class Matcher:
         self._model = model
         self._auto_accept = auto_accept
         self._ask_from = ask_from
+        self._ambiguity_margin = ambiguity_margin
 
     async def match(self, supplier_id: str, rows: Sequence[ExtractedRow]) -> list[MatchResult]:
         results: list[MatchResult | None] = []
@@ -177,7 +180,12 @@ class Matcher:
         )
         candidates = tuple((sku, score / 100) for _, score, sku in found)
         best_sku, best_score = candidates[0]
-        if best_score >= self._auto_accept and attributes_compatible(row, self._products[best_sku]):
+        # A close runner-up that is also compatible (e.g. 6x1 vs 6x2 for a line without measure) makes it a doubt.
+        tied = any(
+            best_score - score < self._ambiguity_margin and attributes_compatible(row, self._products[sku])
+            for sku, score in candidates[1:]
+        )
+        if best_score >= self._auto_accept and attributes_compatible(row, self._products[best_sku]) and not tied:
             return MatchResult(row, MatchStatus.MATCHED, best_sku, None, "fuzzy", best_score, candidates), candidates
         if best_score < self._ask_from:
             return MatchResult(row, MatchStatus.UNMATCHED, None, None, "none", best_score, candidates), candidates
