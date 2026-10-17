@@ -11,6 +11,17 @@ Proyecto del equipo YOLO para el AMD Developer Hackathon: ACT III (track Reinven
 3. Calcula los precios de venta sugeridos según sus reglas de margen y señala los productos que quedarían por debajo del margen mínimo.
 4. Responde con un resumen y, solo si el comerciante toca **Aprobar**, actualiza el catálogo.
 
+## Probalo
+
+El bot está desplegado en [t.me/ListaYaBot](https://t.me/ListaYaBot):
+
+1. Descargá una de las listas de ejemplo de [`samples/ferreteria/`](samples/ferreteria/), por ejemplo `lista_bulonera_sur.csv`, `foto_corralon_san_martin.jpg` o `lista_pintureria_oeste.pdf`.
+2. Enviala al bot. Si no la mandás con el nombre del proveedor como texto, el bot te lo pide.
+3. Respondé las dudas de emparejamiento y revisá el resumen con los precios sugeridos y las alertas de margen.
+4. Tocá **Aprobar** para actualizar el catálogo o **Cancelar** para descartar.
+
+El catálogo de demostración es [`samples/ferreteria/catalogo.csv`](samples/ferreteria/catalogo.csv) y lo comparten todos los que prueban el bot.
+
 ## Cómo usa AMD
 
 La lectura de listas (fotos, PDFs escaneados y texto desordenado) y la resolución de emparejamientos dudosos usan modelos abiertos servidos en GPUs de AMD mediante AMD Token Factory (API compatible con OpenAI). Los precios y márgenes los calcula código determinístico con pruebas automáticas; el modelo nunca los calcula.
@@ -30,7 +41,7 @@ Comparación de modelos de visión sobre la foto y el escaneo: DeepSeek-V4.1-Fla
 
 ## Estado
 
-En desarrollo para la entrega del 18 de octubre de 2026. El flujo completo funciona por Telegram: recibir la lista, preguntar las dudas, resumir y actualizar el catálogo al aprobar.
+MVP terminado para la entrega del 18 de octubre de 2026. El flujo completo funciona por Telegram: recibir la lista, preguntar las dudas, resumir y actualizar el catálogo al aprobar. Corre en un contenedor Docker en una máquina virtual de Oracle Cloud.
 
 ## Configuración
 
