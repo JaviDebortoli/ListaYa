@@ -1,109 +1,111 @@
 # ListaYa
 
-Asistente por Telegram que convierte la lista de precios de un proveedor en precios de venta actualizados y avisa qué productos quedaron con el margen por debajo del mínimo.
+A Telegram assistant that turns a supplier's price list into updated selling prices and flags the products whose margin fell below the minimum.
 
-Proyecto del equipo YOLO para el AMD Developer Hackathon: ACT III (track Reinvent Commerce).
+Built by team YOLO for the AMD Developer Hackathon: ACT III (Reinvent Commerce track).
 
-## Qué hace
+ListaYa is designed for small Argentine businesses, so the bot talks in Argentine Spanish and works in pesos with Argentine number formats (`1.234,56`).
 
-1. El comerciante envía por Telegram la lista del proveedor (PDF, Excel/CSV, foto o texto).
-2. ListaYa extrae cada producto con su costo y lo empareja con el catálogo del comerciante, consultándole cuando hay dudas.
-3. Calcula los precios de venta sugeridos según sus reglas de margen y señala los productos que quedarían por debajo del margen mínimo.
-4. Responde con un resumen y, solo si el comerciante toca **Aprobar**, actualiza el catálogo.
+## What it does
 
-## Probalo
+1. The merchant sends the supplier's list over Telegram (PDF, Excel/CSV, photo or pasted text).
+2. ListaYa extracts every product with its cost and matches it against the merchant's catalog, asking the merchant when a match is doubtful.
+3. It computes suggested selling prices from the merchant's margin rules and flags the products that would fall below the minimum margin.
+4. It replies with a summary and updates the catalog only if the merchant taps **Aprobar** (Approve).
 
-El bot está desplegado en [t.me/ListaYaBot](https://t.me/ListaYaBot):
+## Try it
 
-1. Descargá una de las listas de ejemplo de [`samples/ferreteria/`](samples/ferreteria/), por ejemplo `lista_bulonera_sur.csv`, `foto_corralon_san_martin.jpg` o `lista_pintureria_oeste.pdf`.
-2. Enviala al bot. Si no la mandás con el nombre del proveedor como texto, el bot te lo pide.
-3. Respondé las dudas de emparejamiento y revisá el resumen con los precios sugeridos y las alertas de margen.
-4. Tocá **Aprobar** para actualizar el catálogo o **Cancelar** para descartar.
+The bot is deployed at [t.me/ListaYaBot](https://t.me/ListaYaBot):
 
-El catálogo de demostración es [`samples/ferreteria/catalogo.csv`](samples/ferreteria/catalogo.csv) y lo comparten todos los que prueban el bot.
+1. Download one of the sample lists from [`samples/ferreteria/`](samples/ferreteria/), for example `lista_bulonera_sur.csv`, `foto_corralon_san_martin.jpg` or `lista_pintureria_oeste.pdf`.
+2. Send it to the bot. If you don't add the supplier's name as a caption, the bot asks for it ("¿De qué proveedor es esta lista?").
+3. Answer the matching questions (**Sí** / **No**) and review the summary with the suggested prices and margin alerts.
+4. Tap **Aprobar** to update the catalog or **Cancelar** to discard it.
 
-## Cómo usa AMD
+The demo catalog is [`samples/ferreteria/catalogo.csv`](samples/ferreteria/catalogo.csv), and everyone who tries the bot shares it.
 
-La lectura de listas (fotos, PDFs escaneados y texto desordenado) y la resolución de emparejamientos dudosos usan modelos abiertos servidos en GPUs de AMD mediante AMD Token Factory (API compatible con OpenAI). Los precios y márgenes los calcula código determinístico con pruebas automáticas; el modelo nunca los calcula.
+## How it uses AMD
 
-## Resultados medidos
+Reading lists (photos, scanned PDFs and messy text) and resolving doubtful matches use open models served on AMD GPUs through AMD Token Factory (an OpenAI-compatible API). Prices and margins are computed by deterministic, tested code; the model never computes them.
 
-Benchmark del 16/10/2026 sobre las 5 listas de ejemplo (planilla, texto pegado, PDF con texto, foto y PDF escaneado), con DeepSeek-V4-Flash para texto y DeepSeek-V4.1-Flash para imágenes en AMD Token Factory:
+## Measured results
 
-| Métrica | Resultado |
+Benchmark run on 2026-10-16 over the 5 sample lists (spreadsheet, pasted text, text PDF, photo and scanned PDF), with DeepSeek-V4-Flash for text and DeepSeek-V4.1-Flash for images on AMD Token Factory:
+
+| Metric | Result |
 |---|---|
-| Filas extraídas correctamente (descripción, costo e IVA) | 46 de 46 (100%) |
-| Llamadas al modelo | 4 (la planilla se lee solo con código) |
-| Costo total | USD 0,0012 (unos USD 0,0003 por lista leída con IA) |
-| Tiempo por lista leída con IA | entre 24 y 36 segundos |
+| Rows extracted correctly (description, cost and VAT) | 46 of 46 (100%) |
+| Model calls | 4 (the spreadsheet is read by code only) |
+| Total cost | USD 0.0012 (about USD 0.0003 per list read with AI) |
+| Time per list read with AI | 24 to 36 seconds |
 
-Comparación de modelos de visión sobre la foto y el escaneo: DeepSeek-V4.1-Flash 14/14, Qwen3.8-Flash-Next 14/14 (el doble de costo), MiMo-V2.6-Flash 0/14.
+Vision models compared on the photo and the scan: DeepSeek-V4.1-Flash 14/14, Qwen3.8-Flash-Next 14/14 (at twice the cost), MiMo-V2.6-Flash 0/14.
 
-## Estado
+## Status
 
-MVP terminado para la entrega del 18 de octubre de 2026. El flujo completo funciona por Telegram: recibir la lista, preguntar las dudas, resumir y actualizar el catálogo al aprobar. Corre en un contenedor Docker en una máquina virtual de Oracle Cloud.
+MVP complete for the October 18, 2026 submission. The whole flow works over Telegram: receiving the list, asking about doubtful matches, summarizing and updating the catalog on approval. It runs in a Docker container on an Oracle Cloud virtual machine.
 
-## Configuración
+## Configuration
 
-La configuración se lee de variables de entorno (por ejemplo, de un archivo `.env` local que no se versiona):
+Settings are read from environment variables (for example from a local `.env` file, which is not versioned):
 
-| Variable | Para qué sirve | Por defecto |
+| Variable | Purpose | Default |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) | (obligatoria) |
-| `RADEON_API_KEY` | Clave de AMD Token Factory | (obligatoria) |
-| `TELEGRAM_ALLOWED_CHAT_IDS` | Ids de los chats que pueden usar el bot, separados por coma, o `*` para que cualquier chat lo use (todos comparten el mismo catálogo). A un chat no autorizado el bot le responde con su id | vacío |
-| `LISTAYA_CATALOG_PATH` | Catálogo del comerciante en CSV; aprobar una lista lo actualiza | `data/catalogo.csv` |
-| `LISTAYA_DB_PATH` | Base SQLite con alias confirmados, IVA por proveedor y métricas | `data/listaya.db` |
-| `LISTAYA_TARGET_MARGIN` / `LISTAYA_MIN_MARGIN` | Margen objetivo y mínimo, sobre el precio de venta | `0.30` / `0.20` |
-| `LISTAYA_ROUNDING_STEP` | Redondeo del precio sugerido | `10` |
-| `LISTAYA_PRICES_INCLUDE_VAT` / `LISTAYA_VAT_RATE` | Si el catálogo tiene precios con IVA, y la alícuota | `false` / `0.21` |
-| `LISTAYA_CURRENCY` / `LISTAYA_DECIMAL_SEPARATOR` | Moneda del comercio y separador decimal de las listas | `ARS` / `,` |
-| `LISTAYA_TEXT_MODEL` / `LISTAYA_VISION_MODEL` | Modelos de Token Factory para texto e imágenes | `DeepSeek-V4-Flash` / `DeepSeek-V4.1-Flash` |
-| `TOKEN_FACTORY_BASE_URL` | Base URL de la API | `https://developer.amd.com.cn/radeon/api/v1` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token, created with [@BotFather](https://t.me/BotFather) | (required) |
+| `RADEON_API_KEY` | AMD Token Factory key | (required) |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | Comma-separated ids of the chats that may use the bot, or `*` to let any chat use it (they all share the same catalog). The bot replies to an unauthorized chat with its id | empty |
+| `LISTAYA_CATALOG_PATH` | The merchant's catalog as CSV; approving a list updates it | `data/catalogo.csv` |
+| `LISTAYA_DB_PATH` | SQLite database with confirmed aliases, per-supplier VAT and metrics | `data/listaya.db` |
+| `LISTAYA_TARGET_MARGIN` / `LISTAYA_MIN_MARGIN` | Target and minimum margin, on the selling price | `0.30` / `0.20` |
+| `LISTAYA_ROUNDING_STEP` | Rounding of the suggested price | `10` |
+| `LISTAYA_PRICES_INCLUDE_VAT` / `LISTAYA_VAT_RATE` | Whether catalog prices include VAT, and the VAT rate | `false` / `0.21` |
+| `LISTAYA_CURRENCY` / `LISTAYA_DECIMAL_SEPARATOR` | The store's currency and the lists' decimal separator | `ARS` / `,` |
+| `LISTAYA_TEXT_MODEL` / `LISTAYA_VISION_MODEL` | Token Factory models for text and images | `DeepSeek-V4-Flash` / `DeepSeek-V4.1-Flash` |
+| `TOKEN_FACTORY_BASE_URL` | API base URL | `https://developer.amd.com.cn/radeon/api/v1` |
 
-Para probar con los datos de ejemplo, copiá el catálogo a la ubicación por defecto (la carpeta `data/` no se versiona):
+To try it with the sample data, copy the catalog to the default location (the `data/` folder is not versioned):
 
 ```bash
 mkdir data
 cp samples/ferreteria/catalogo.csv data/catalogo.csv
 ```
 
-Al arrancar, el bot verifica que los modelos configurados existan en Token Factory. Si `TELEGRAM_ALLOWED_CHAT_IDS` está vacío, escribile al bot: te responde con el id de tu chat para agregarlo.
+On startup the bot checks that the configured models exist on Token Factory. If `TELEGRAM_ALLOWED_CHAT_IDS` is empty, message the bot: it replies with your chat id so you can add it.
 
-## Ejecutar en local
+## Run locally
 
-Requiere Python 3.12 o superior.
+Requires Python 3.12 or later.
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"   # en Linux/macOS: .venv/bin/python
-.venv/Scripts/python -m pytest                    # pruebas
-.venv/Scripts/python -m listaya                   # inicia el bot
-.venv/Scripts/python -m listaya.token_factory_check   # verifica el acceso a AMD Token Factory
-.venv/Scripts/python -m listaya.extraction_check lista.pdf   # extrae una lista y muestra filas, tokens y tiempo
-.venv/Scripts/python -m listaya.benchmark          # precisión, tiempo y costo sobre las listas de ejemplo
-.venv/Scripts/python -m listaya.metrics            # métricas de cada lista procesada por el bot
+.venv/Scripts/python -m pip install -e ".[dev]"   # on Linux/macOS: .venv/bin/python
+.venv/Scripts/python -m pytest                    # tests
+.venv/Scripts/python -m listaya                   # starts the bot
+.venv/Scripts/python -m listaya.token_factory_check   # checks access to AMD Token Factory
+.venv/Scripts/python -m listaya.extraction_check lista.pdf   # extracts a list and shows rows, tokens and time
+.venv/Scripts/python -m listaya.benchmark          # accuracy, time and cost on the sample lists
+.venv/Scripts/python -m listaya.metrics            # metrics for every list the bot processed
 ```
 
-`benchmark` compara cada lista de ejemplo con su resultado esperado (`samples/ferreteria/esperado.json`): una fila es correcta si coinciden la descripción, el costo y el IVA. `metrics` lee la base SQLite del bot; los segundos de cada lista van desde que llega hasta que se envía el resumen, así que incluyen el tiempo que el comerciante tarda en contestar las preguntas.
+`benchmark` compares each sample list with its expected result (`samples/ferreteria/esperado.json`): a row is correct when its description, cost and VAT all match. `metrics` reads the bot's SQLite database; the seconds for each list run from when it arrives until the summary is sent, so they include the time the merchant takes to answer questions.
 
-`extraction_check` acepta PDF, Excel/CSV, fotos y `.txt`, o texto con `--text`. Los modelos se eligen con `--text-model` y `--vision-model` (por defecto `DeepSeek-V4-Flash` y `DeepSeek-V4.1-Flash`). Por defecto asume listas argentinas (pesos y coma decimal); para listas en dólares con punto decimal, agregá `--currency USD --decimal-separator .`.
+`extraction_check` accepts PDF, Excel/CSV, photos and `.txt`, or text with `--text`. Choose the models with `--text-model` and `--vision-model` (by default `DeepSeek-V4-Flash` and `DeepSeek-V4.1-Flash`). It assumes Argentine lists by default (pesos and decimal comma); for dollar lists with a decimal point, add `--currency USD --decimal-separator .`.
 
-## Ejecutar con Docker
+## Run with Docker
 
 ```bash
 docker build -t listaya .
 mkdir data
-cp samples/ferreteria/catalogo.csv data/catalogo.csv   # o tu propio catálogo
+cp samples/ferreteria/catalogo.csv data/catalogo.csv   # or your own catalog
 docker run --rm --env-file .env -v "$(pwd)/data:/app/data" listaya
 ```
 
-El contenedor corre como usuario sin privilegios y guarda el catálogo y la base SQLite en `/app/data` (el volumen montado), así que los precios aprobados y lo aprendido persisten entre reinicios.
+The container runs as an unprivileged user and keeps the catalog and the SQLite database in `/app/data` (the mounted volume), so approved prices and learned aliases survive restarts.
 
-## Datos de ejemplo
+## Sample data
 
-La carpeta `samples/` tiene datos ficticios de una ferretería argentina, en pesos: el catálogo y dos listas de proveedor (planilla y texto pegado). Ver `samples/README.md`.
+The `samples/` folder holds fictional data for an Argentine hardware store, in pesos: the catalog, five supplier lists (spreadsheet, pasted text, text PDF, photo and scanned PDF) and their expected extraction results. See `samples/README.md`.
 
-## Licencia
+## License
 
-Ver el archivo `LICENSE`.
+See the `LICENSE` file.

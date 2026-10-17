@@ -1,19 +1,20 @@
-# Datos de ejemplo
+# Sample data
 
-Datos **ficticios** de una ferretería de demostración y dos proveedores inventados, en pesos argentinos. No corresponden a ningún comercio ni proveedor real; sirven para probar ListaYa de punta a punta hasta tener listas reales anonimizadas.
+**Fictional** data for a demo hardware store and four made-up suppliers, in Argentine pesos. They do not belong to any real store or supplier; they exist to test ListaYa end to end until real anonymized lists are available. The files themselves are in Spanish, as a real Argentine merchant would have them.
 
-| Archivo | Qué es | Qué ejercita |
+| File | What it is | What it exercises |
 |---|---|---|
-| `ferreteria/catalogo.csv` | Catálogo del comerciante: 25 productos con costo y precio vigente, sin IVA | Catálogo en CSV |
-| `ferreteria/lista_bulonera_sur.csv` | Lista de un proveedor en planilla, separada por `;`, precios sin IVA | Ruta de código (sin modelo): encabezado debajo de un título, filas de sección, subas, alertas de margen, una línea ambigua ("TORNILLO AUTOPERFORANTE" sin medida) y un producto nuevo (tarugo de 12 mm) |
-| `ferreteria/lista_distribuidora_norte.txt` | Lista pegada como texto, precios con IVA del 21% incluido | Ruta del modelo de texto: formato desprolijo, IVA a descontar, separador de miles (`$ 189.000`), un precio "consultar" y un producto nuevo (amoladora de banco) |
-| `ferreteria/lista_pintureria_oeste.pdf` | PDF con capa de texto, precios "+ IVA" (sin IVA) | Ruta de PDF con texto: el texto va al modelo y el código decide el IVA según lo que dice la lista. Incluye un producto nuevo (esmalte sintético) |
-| `ferreteria/foto_corralon_san_martin.jpg` | Foto de una lista impresa, levemente torcida, precios con IVA incluido | Ruta del modelo de visión. Incluye un producto nuevo (llave ajustable) |
-| `ferreteria/escaneo_corralon_san_martin.pdf` | La misma lista como PDF escaneado (solo imagen) | Ruta de PDF escaneado: cada página se convierte en imagen para el modelo de visión |
+| `ferreteria/catalogo.csv` | The merchant's catalog: 25 products with cost and current price, without VAT | CSV catalog |
+| `ferreteria/lista_bulonera_sur.csv` | A supplier list as a spreadsheet, `;`-separated, prices without VAT | Code-only path (no model): header below a title, section rows, price increases, margin alerts, an ambiguous line ("TORNILLO AUTOPERFORANTE" without a size) and a new product (12 mm wall plug) |
+| `ferreteria/lista_distribuidora_norte.txt` | A list pasted as text, prices including 21% VAT | Text model path: messy layout, VAT to remove, thousands separator (`$ 189.000`), a "consultar" (ask for price) row and a new product (bench grinder) |
+| `ferreteria/lista_pintureria_oeste.pdf` | A PDF with a text layer, prices "+ IVA" (without VAT) | Text PDF path: the text goes to the model and code decides VAT from what the list states. Includes a new product (synthetic enamel) |
+| `ferreteria/foto_corralon_san_martin.jpg` | A photo of a printed list, slightly skewed, prices including VAT | Vision model path. Includes a new product (adjustable wrench) |
+| `ferreteria/escaneo_corralon_san_martin.pdf` | The same list as a scanned PDF (image only) | Scanned PDF path: each page is turned into an image for the vision model |
+| `ferreteria/esperado.json` | Hand-labeled expected rows for each list | Ground truth for `python -m listaya.benchmark` |
 
-El PDF, la foto y el escaneo se generan con `python scripts/make_sample_documents.py`.
+The PDF, the photo and the scan are generated with `python scripts/make_sample_documents.py`.
 
-Para probar la extracción con estas listas:
+To try extraction on these lists:
 
 ```bash
 python -m listaya.extraction_check samples/ferreteria/lista_bulonera_sur.csv
@@ -21,4 +22,4 @@ python -m listaya.extraction_check samples/ferreteria/lista_distribuidora_norte.
 python -m listaya.extraction_check samples/ferreteria/foto_corralon_san_martin.jpg
 ```
 
-Aprobar una lista en el bot reescribe el archivo del catálogo: usá una copia si querés conservar el original.
+Approving a list in the bot rewrites the catalog file: use a copy if you want to keep the original.
