@@ -151,7 +151,8 @@ class Assistant:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
 
     async def handle(self, message: IncomingMessage) -> None:
-        if message.chat_id not in self._allowed:
+        # "*" opens the bot to every chat (a public demo); otherwise only the listed chats are served.
+        if "*" not in self._allowed and message.chat_id not in self._allowed:
             await self._channel.send_text(message.chat_id, NOT_ALLOWED.format(chat_id=message.chat_id))
             return
         session = self._sessions.setdefault(message.chat_id, Session())

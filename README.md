@@ -40,7 +40,7 @@ La configuración se lee de variables de entorno (por ejemplo, de un archivo `.e
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram, creado con [@BotFather](https://t.me/BotFather) | (obligatoria) |
 | `RADEON_API_KEY` | Clave de AMD Token Factory | (obligatoria) |
-| `TELEGRAM_ALLOWED_CHAT_IDS` | Ids de los chats que pueden usar el bot, separados por coma. A un chat no autorizado el bot le responde con su id | vacío |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | Ids de los chats que pueden usar el bot, separados por coma, o `*` para que cualquier chat lo use (todos comparten el mismo catálogo). A un chat no autorizado el bot le responde con su id | vacío |
 | `LISTAYA_CATALOG_PATH` | Catálogo del comerciante en CSV; aprobar una lista lo actualiza | `data/catalogo.csv` |
 | `LISTAYA_DB_PATH` | Base SQLite con alias confirmados, IVA por proveedor y métricas | `data/listaya.db` |
 | `LISTAYA_TARGET_MARGIN` / `LISTAYA_MIN_MARGIN` | Margen objetivo y mínimo, sobre el precio de venta | `0.30` / `0.20` |

@@ -117,6 +117,22 @@ class TestAccess:
         assert env.extractor.calls == []
         assert "999" in texts(env)[0] and "no está autorizado" in texts(env)[0]
 
+    def test_star_lets_any_chat_use_the_bot(self, env):
+        env.assistant = Assistant(
+            channel=env.channel,
+            extractor=env.extractor,
+            matcher_factory=lambda catalog: Matcher(catalog, env.store, FakeChatClient(), model="T"),
+            catalog=CsvCatalog(env.catalog_path),
+            store=env.store,
+            rule=MarginRule(D("0.30"), D("0.20")),
+            pricing=PricingConfig(),
+            allowed_chats=frozenset({"*"}),
+        )
+        send(env, chat_id="999", **file_message())
+        assert len(env.extractor.calls) == 1
+        assert not any("no está autorizado" in text for text in texts(env))
+        assert all(m.chat_id == "999" for m in env.channel.sent)
+
 
 class TestHappyPath:
     def test_file_with_caption_is_acknowledged_processed_summarized_and_approved(self, env):

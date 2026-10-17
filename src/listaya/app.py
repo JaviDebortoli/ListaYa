@@ -150,6 +150,8 @@ def main() -> None:
         raise SystemExit(f"Configuration error: {error}") from None
     if not settings.allowed_chat_ids:
         logging.warning("TELEGRAM_ALLOWED_CHAT_IDS is empty: the bot will only reply with each chat's id")
+    elif "*" in settings.allowed_chat_ids:
+        logging.warning("TELEGRAM_ALLOWED_CHAT_IDS is *: any chat can use the bot and update the shared catalog")
     asyncio.run(_check_models(settings))
 
     store = SqliteStore(settings.db_path)
